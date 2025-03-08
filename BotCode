@@ -1,0 +1,478 @@
+// Here are fixes for the most critical issues in the SolanaTradeBot
+
+// 1. Fix Jupiter v6 transaction handling
+private async executeTrade(
+  inputMint: string,
+  outputMint: string,
+  amount: number
+): Promise<TradeResult> {
+  try {
+    console.log(`Attempting to trade ${amount} of ${inputMint} for ${outputMint}...`);
+    
+    // Check if we should trade based on daily loss limit
+    if (this.hasHitDailyLossLimit()) {
+      console.log('Daily loss limit reached, skipping trade');
+      return {
+        bestRoute: null,
+        adaptiveSlippage: 0,
+        transaction: null,
+        profitAmount: 0,
+        profitThresholdMet: false,
+        liquiditySufficient: false
+      };
+    }
+    
+    // Get routes from Jupiter
+    const slippageBps = 50; // 0.5% default slippage
+    const jupiterRoutes = await this.getJupiterRoutes(inputMint, outputMint, amount, slippageBps);
+    
+    if (!jupiterRoutes.data || jupiterRoutes.data.length === 0) {
+      console.log('No routes found for this pair');
+      return {
+        bestRoute: null,
+        adaptiveSlippage: 0,
+        transaction: null,
+        profitAmount: 0,
+        profitThresholdMet: false,
+        liquiditySufficient: false
+      };
+    }
+    
+    // Convert Jupiter routes to our format
+    const routes: RouteInfo[] = jupiterRoutes.data.map((route: any) => {
+      // Get the right decimals from token metadata instead of hardcoding
+      const outputDecimals = this.getTokenDecimals(outputMint);
+      return {
+        dex: 'Jupiter',
+        expectedOutput: parseFloat(route.outAmount) / Math.pow(10, outputDecimals),
+        route: route.marketInfos?.map((info: any) => info.label) || [],
+        estimatedPriceImpact: route.priceImpactPct || 0
+      };
+    });
+    
+    // Find the best route
+    const bestRoute = this.findBestPrice(routes);
+    
+    if (!bestRoute) {
+      console.log('Could not find best route');
+      return {
+        bestRoute: null,
+        adaptiveSlippage: 0,
+        transaction: null,
+        profitAmount: 0,
+        profitThresholdMet: false,
+        liquiditySufficient: false
+      };
+    }
+    
+    // Calculate adaptive slippage
+    const adaptiveSlippage = this.calculateAdaptiveSlippage(bestRoute.estimatedPriceImpact);
+    
+    // Get token decimals from metadata
+    const inputDecimals = this.getTokenDecimals(inputMint);
+    const outputDecimals = this.getTokenDecimals(outputMint);
+    
+    // Estimate profit (accounting for transaction costs)
+    const inputValueUsd = amount / Math.pow(10, inputDecimals) * (await this.getTokenUsdPrice(inputMint));
+    const outputValueUsd = bestRoute.expectedOutput * (await this.getTokenUsdPrice(outputMint));
+    
+    // Estimate transaction fee (in SOL, converted to USD)
+    const estimatedFeeInLamports = 5000; // Base estimate, should be refined
+    const solPrice = await this.getTokenUsdPrice('So11111111111111111111111111111111111111112');
+    const transactionFeeUsd = (estimatedFeeInLamports / 1e9) * solPrice;
+    
+    const potentialProfit = outputValueUsd - inputValueUsd - transactionFeeUsd;
+    const profitThresholdMet = potentialProfit >= this.minProfitThreshold;
+    
+    console.log(`Best route found: ${bestRoute.dex}, Expected output: ${bestRoute.expectedOutput}`);
+    console.log(`Estimated profit: $${potentialProfit.toFixed(4)} (after tx fee: $${transactionFeeUsd.toFixed(4)})`);
+    console.log(`Profit threshold met: ${profitThresholdMet}`);
+    
+    // Only create transaction if profit threshold is met
+    let transaction = null;
+    
+    if (profitThresholdMet) {
+      try {
+        // Execute via Jupiter
+        const slippageBps = Math.floor(adaptiveSlippage * 100);
+        
+        // Find the matching original route from Jupiter response for the swap
+        const originalRoute = jupiterRoutes.data.find((r: any) => 
+          parseFloat(r.outAmount) === bestRoute.expectedOutput * Math.pow(10, outputDecimals)
+        );
+        
+        if (!originalRoute) {
+          throw new Error('Could not match route for swap execution');
+        }
+        
+        // Set a timeout for the fetch operation
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        try {
+          const response = await fetch(`${this.jupiterApiUrl}/swap`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              route: originalRoute,
+              userPublicKey: this.wallet.publicKey.toString(),
+              slippageBps
+            }),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`Jupiter swap API error: ${response.status}`);
+          }
+          
+          const swapData = await response.json();
+          
+          if (swapData && swapData.swapTransaction) {
+            // Handle versioned transactions correctly
+            if (swapData.versionedTransaction) {
+              // For versioned transactions (Jupiter v6)
+              const messageBytes = Buffer.from(swapData.swapTransaction, 'base64');
+              const versionedTx = VersionedTransaction.deserialize(messageBytes);
+              versionedTx.sign([this.wallet]);
+              transaction = versionedTx;
+            } else {
+              // Legacy transaction fallback
+              transaction = Transaction.from(Buffer.from(swapData.swapTransaction, 'base64'));
+              transaction.partialSign(this.wallet);
+            }
+          } else {
+            console.error('No swap transaction received from Jupiter');
+          }
+        } catch (fetchError) {
+          if (fetchError.name === 'AbortError') {
+            console.error('Jupiter swap API request timed out');
+          } else {
+            console.error('Error creating swap transaction:', fetchError);
+          }
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (swapError) {
+        console.error('Error creating swap transaction:', swapError);
+      }
+    }
+    
+    return {
+      bestRoute,
+      adaptiveSlippage,
+      transaction,
+      profitAmount: potentialProfit,
+      profitThresholdMet,
+      liquiditySufficient: true
+    };
+  } catch (error) {
+    console.error('Error executing trade:', error);
+    return {
+      bestRoute: null,
+      adaptiveSlippage: 0,
+      transaction: null,
+      profitAmount: 0,
+      profitThresholdMet: false,
+      liquiditySufficient: false
+    };
+  }
+}
+
+// 2. Fix token account handling with proper checking
+private async getTokenBalance(mint: string): Promise<number> {
+  try {
+    // Special case for SOL (native token)
+    if (mint === 'So11111111111111111111111111111111111111112') {
+      const solBalance = await this.connection.getBalance(this.wallet.publicKey);
+      // Convert from lamports to SOL
+      return solBalance / 1e9;
+    }
+    
+    // For SPL tokens - use modern API
+    const tokenMintPubkey = new PublicKey(mint);
+    const tokenAccount = getAssociatedTokenAddressSync(
+      tokenMintPubkey,
+      this.wallet.publicKey
+    );
+    
+    try {
+      const info = await this.connection.getTokenAccountBalance(tokenAccount);
+      return parseFloat(info.value.amount) / (10 ** info.value.decimals);
+    } catch (e: any) {
+      // Check if error is because account doesn't exist
+      if (e.message && e.message.includes('could not find account')) {
+        console.log(`Token account for ${mint} doesn't exist yet`);
+        return 0;
+      }
+      console.warn(`Error fetching token balance for ${mint}:`, e);
+      return 0;
+    }
+  } catch (error) {
+    console.error(`Error fetching token balance for ${mint}:`, error);
+    return 0;
+  }
+}
+
+// 3. Add method to get token decimals from metadata
+private tokenDecimalCache: Map<string, number> = new Map();
+
+private async getTokenDecimals(mint: string): Promise<number> {
+  // Check cache first
+  if (this.tokenDecimalCache.has(mint)) {
+    return this.tokenDecimalCache.get(mint)!;
+  }
+  
+  // Special case for SOL
+  if (mint === 'So11111111111111111111111111111111111111112') {
+    this.tokenDecimalCache.set(mint, 9);
+    return 9;
+  }
+  
+  try {
+    // Get token metadata from Solana
+    const info = await this.connection.getParsedAccountInfo(new PublicKey(mint));
+    
+    if (info && info.value && 'parsed' in info.value.data) {
+      const parsedData = info.value.data.parsed;
+      if (parsedData && parsedData.info && parsedData.info.decimals) {
+        const decimals = parsedData.info.decimals;
+        this.tokenDecimalCache.set(mint, decimals);
+        return decimals;
+      }
+    }
+    
+    // Fallbacks for common tokens if metadata fetch fails
+    const commonDecimals: {[key: string]: number} = {
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 6, // USDC
+      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 6, // USDT
+      'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': 5, // BONK
+      'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So': 9, // mSOL
+    };
+    
+    if (commonDecimals[mint]) {
+      this.tokenDecimalCache.set(mint, commonDecimals[mint]);
+      return commonDecimals[mint];
+    }
+    
+    // Default to 9 decimals if we can't determine
+    console.warn(`Could not determine decimals for ${mint}, using default of 9`);
+    this.tokenDecimalCache.set(mint, 9);
+    return 9;
+  } catch (error) {
+    console.error(`Error getting token decimals for ${mint}:`, error);
+    // Default to 9 decimals
+    this.tokenDecimalCache.set(mint, 9);
+    return 9;
+  }
+}
+
+// 4. Improve transaction sending with proper error handling and retries
+private async sendTransaction(transaction: Transaction | VersionedTransaction): Promise<string> {
+  const maxRetries = 3;
+  let currentRetry = 0;
+  
+  while (currentRetry < maxRetries) {
+    try {
+      let signature;
+      
+      // Set a reasonable timeout for confirmation
+      const confirmationTimeoutMs = 60000; // 60 seconds
+      
+      if (transaction instanceof VersionedTransaction) {
+        // Handle versioned transaction
+        signature = await this.connection.sendTransaction(transaction);
+        
+        // Wait for confirmation with timeout
+        const confirmStartTime = Date.now();
+        while (Date.now() - confirmStartTime < confirmationTimeoutMs) {
+          const confirmation = await this.connection.getSignatureStatus(signature);
+          if (confirmation && confirmation.value && confirmation.value.confirmationStatus === 'confirmed') {
+            console.log(`Transaction confirmed: ${signature}`);
+            return signature;
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        throw new Error('Transaction confirmation timed out');
+      } else {
+        // Handle legacy transaction
+        signature = await sendAndConfirmTransaction(
+          this.connection,
+          transaction,
+          [this.wallet],
+          {
+            skipPreflight: false,
+            commitment: 'confirmed',
+            maxRetries: 5,
+          }
+        );
+        console.log(`Transaction confirmed: ${signature}`);
+        return signature;
+      }
+    } catch (error: any) {
+      currentRetry++;
+      
+      // Check if this is a retryable error
+      const isRetryable = 
+        error.message?.includes('timeout') || 
+        error.message?.includes('block height exceeded') ||
+        error.message?.includes('too many requests');
+      
+      if (isRetryable && currentRetry < maxRetries) {
+        const delay = Math.pow(2, currentRetry) * 1000; // Exponential backoff
+        console.log(`Transaction failed, retrying in ${delay/1000}s (attempt ${currentRetry}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        console.error('Error sending transaction:', error);
+        throw error;
+      }
+    }
+  }
+  
+  throw new Error(`Failed to send transaction after ${maxRetries} attempts`);
+}
+
+// 5. Implement stop loss functionality
+private checkStopLoss(tokenBalance: number, tokenMint: string, tokenBalanceUsd: number): boolean {
+  try {
+    const tokenSymbol = this.getMintSymbol(tokenMint);
+    const stopLossKey = `stopLoss_${tokenMint}`;
+    
+    // Get the high-water mark for this token (if it exists)
+    const highWaterMarkStr = this.storage.getItem(stopLossKey);
+    let highWaterMarkUsd = highWaterMarkStr ? parseFloat(highWaterMarkStr) : 0;
+    
+    // If current value is higher than high-water mark, update it
+    if (tokenBalanceUsd > highWaterMarkUsd) {
+      highWaterMarkUsd = tokenBalanceUsd;
+      this.storage.setItem(stopLossKey, highWaterMarkUsd.toString());
+      return false; // No stop loss triggered
+    }
+    
+    // Check if we're below stop loss threshold
+    if (highWaterMarkUsd > 0) {
+      const dropPercentage = (1 - (tokenBalanceUsd / highWaterMarkUsd)) * 100;
+      
+      if (dropPercentage >= this.stopLossPercentage) {
+        console.log(`⚠️ STOP LOSS TRIGGERED for ${tokenSymbol}:`);
+        console.log(`  Peak value: $${highWaterMarkUsd.toFixed(2)}`);
+        console.log(`  Current value: $${tokenBalanceUsd.toFixed(2)}`);
+        console.log(`  Drop: ${dropPercentage.toFixed(2)}% (threshold: ${this.stopLossPercentage}%)`);
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error in stop loss check:', error);
+    return false;
+  }
+}
+
+// 6. Security improvement: better key handling
+constructor(rpcEndpoint: string, privateKeyOrPath: string, useKeyPath: boolean = false) {
+  this.connection = new Connection(rpcEndpoint, 'confirmed');
+  
+  // Load private key more securely
+  let privateKeyBuffer: Buffer;
+  
+  if (useKeyPath) {
+    // Load key from file
+    try {
+      const keyData = fs.readFileSync(privateKeyOrPath, 'utf8');
+      // Remove any whitespace, quotes, or brackets
+      const cleanedKey = keyData.replace(/[\s\[\]"']/g, '');
+      privateKeyBuffer = Buffer.from(cleanedKey, 'hex');
+    } catch (error) {
+      throw new Error(`Failed to load private key from file: ${error}`);
+    }
+  } else {
+    // Direct key input (still not ideal, but better documented)
+    privateKeyBuffer = Buffer.from(privateKeyOrPath, 'hex');
+  }
+  
+  // Validate key length
+  if (privateKeyBuffer.length !== 64) {
+    throw new Error(`Invalid private key length: ${privateKeyBuffer.length}, expected 64 bytes`);
+  }
+  
+  this.wallet = Keypair.fromSecretKey(privateKeyBuffer);
+  this.storage = new StorageManager();
+  console.log(`Bot initialized with wallet: ${this.wallet.publicKey.toString()}`);
+}
+
+// 7. Add a configurable token pair manager
+private addTokenPair(inputMint: string, outputMint: string): void {
+  // Validate inputs
+  if (!inputMint || !outputMint) {
+    throw new Error('Invalid token pair - mints cannot be empty');
+  }
+  
+  try {
+    new PublicKey(inputMint);
+    new PublicKey(outputMint);
+  } catch (error) {
+    throw new Error('Invalid token mint address format');
+  }
+  
+  // Check if pair already exists
+  const pairExists = this.tokenPairs.some(([input, output]) => 
+    input === inputMint && output === outputMint
+  );
+  
+  if (pairExists) {
+    console.log(`Token pair ${inputMint}-${outputMint} already exists`);
+    return;
+  }
+  
+  // Add the new pair
+  this.tokenPairs.push([inputMint, outputMint]);
+  console.log(`Added new token pair: ${this.getMintSymbol(inputMint)}-${this.getMintSymbol(outputMint)}`);
+  
+  // Store updated pairs in storage
+  this.storage.setItem('tokenPairs', JSON.stringify(this.tokenPairs));
+}
+
+public removeTokenPair(inputMint: string, outputMint: string): boolean {
+  const initialLength = this.tokenPairs.length;
+  
+  this.tokenPairs = this.tokenPairs.filter(([input, output]) => 
+    !(input === inputMint && output === outputMint)
+  );
+  
+  const removed = initialLength > this.tokenPairs.length;
+  
+  if (removed) {
+    console.log(`Removed token pair: ${this.getMintSymbol(inputMint)}-${this.getMintSymbol(outputMint)}`);
+    this.storage.setItem('tokenPairs', JSON.stringify(this.tokenPairs));
+  } else {
+    console.log(`Token pair not found: ${this.getMintSymbol(inputMint)}-${this.getMintSymbol(outputMint)}`);
+  }
+  
+  return removed;
+}
+
+// Load token pairs from storage
+private loadTokenPairs(): void {
+  const savedPairs = this.storage.getItem('tokenPairs');
+  
+  if (savedPairs) {
+    try {
+      const parsedPairs = JSON.parse(savedPairs);
+      if (Array.isArray(parsedPairs) && parsedPairs.length > 0) {
+        this.tokenPairs = parsedPairs;
+        console.log(`Loaded ${this.tokenPairs.length} token pairs from storage`);
+        return;
+      }
+    } catch (error) {
+      console.error('Error parsing saved token pairs:', error);
+    }
+  }
+  
+  // Default to USDC-SOL if no pairs are loaded
+  this.tokenPairs = [
+    ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'So11111111111111111111111111111111111111112'] // USDC-SOL
+  ];
+  console.log('Using default token pair: USDC-SOL');
+}
