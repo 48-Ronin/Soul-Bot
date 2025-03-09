@@ -2218,16 +2218,12 @@ class EnhancedSolanaBot {
       if (solBalance < minimumSolRequired) {
         this.log(`Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL, needed: ${minimumSolRequired} SOL`, 'warn');
         
-        // Send Discord notification for low SOL balance
-        await this.sendDiscordNotification(
-          `⚠️ **LOW SOL BALANCE**\nC
 this.log(`Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL, needed: ${minimumSolRequired} SOL`, 'warn');
         
         // Send Discord notification for low SOL balance
         await this.sendDiscordNotification(
           `⚠️ **LOW SOL BALANCE**\nCurrent: ${solBalance.toFixed(6)} SOL\nRequired: ${minimumSolRequired} SOL\nPlease add SOL for transaction fees.`,
-          'warn'
-        );
+          'warn');
         
         return;
       }
