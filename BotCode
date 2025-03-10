@@ -1,1 +1,2282 @@
+const { Connection, Keypair, PublicKey, Transaction, VersionedTransaction, sendAndConfirmTransaction } = require('@solana/web3.js');
+const { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, TOKEN_PROGRAM_ID } = require('@solana/spl-token');
+const fetch = require('node-fetch');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const bs58 = require('bs58');
+const nacl = require('tweetnacl'); // CRITICAL: Added for transaction signing
+const { promisify } = require('util');
+const appendFileAsync = promisify(fs.appendFile);
+const writeFileAsync = promisify(fs.writeFile);
+const renameAsync = promisify(fs.rename);
 
+// Circuit breaker implementation
+class CircuitBreaker {
+  constructor(timeWindowMs = 60000, failureThreshold = 5, resetTimeoutMs = 30000) {
+    this.failures = 0;
+    this.state = 'CLOSED';
+    this.lastFailureTime = 0;
+    this.timeWindowMs = timeWindowMs;
+    this.failureThreshold = failureThreshold;
+    this.resetTimeoutMs = resetTimeoutMs;
+  }
+
+  async execute(fn, fallback) {
+    if (this.state === 'OPEN') {
+      if (Date.now() - this.lastFailureTime > this.resetTimeoutMs) {
+        this.state = 'HALF-OPEN';
+      } else {
+        return fallback ? await fallback() : null;
+      }
+    }
+
+    try {
+      const result = await fn();
+      if (this.state === 'HALF-OPEN') {
+        this.state = 'CLOSED';
+        this.failures = 0;
+      }
+      return result;
+    } catch (error) {
+      this.failures++;
+      this.lastFailureTime = Date.now();
+      if (this.failures >= this.failureThreshold) {
+        this.state = 'OPEN';
+      }
+      if (fallback) {
+        return await fallback();
+      }
+      throw error;
+    }
+  }
+}
+
+/**
+ * Enhanced Solana Trading Bot with multiple strategies and Helius integration 
+ */
+class EnhancedSolanaBot {
+  // RPC and API endpoints
+  #connection;
+  #connectionPool = [];
+  #wallet;
+  #heliusApiKey = '8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
+  #heliusMainnetRpc = 'https://mainnet.helius-rpc.com/?api-key=8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
+  #heliusTransactionApi = 'https://api.helius.xyz/v0/transactions';
+  #heliusAddressApi = 'https://api.helius.xyz/v0/addresses';
+  #jupiterApiUrl = 'https://quote-api.jup.ag/v6';
+
+  // Circuit breakers
+  #jupiterQuoteCircuitBreaker;
+  #jupiterSwapCircuitBreaker;
+  
+  // File operation queue
+  #writeQueue = [];
+  #isProcessingQueue = false;
+
+  // Bot state
+  #isRunning = false;
+  #simulationMode = true;
+  #isCycleRunning = false;
+  #isArbitrageRunning = false;
+  #isDailyMoversRunning = false;
+  #runIntervalId = null;
+  #inStopLossMode = false; // Added to handle stop loss pricing
+
+  // Strategy parameters
+  #riskPercentage = 1;
+  #minProfitThreshold = 0.1;
+  #stopLossPercentage = 2.5;
+  #dailyLossLimit = 3;
+  #maxPriceImpact = 2.0;
+  #dailyMoverThreshold = 5;
+  #dailyMoversAllocation = 60;
+  #arbitrageAllocation = 40;
+
+  // Trading state
+  #tradingPairs = [];
+  #rpcEndpoints = [];
+  #currentRpcIndex = 0;
+  #feeBuffer = 0.005;
+  #dailyStartBalance = 0;
+  #dailyPnL = 0;
+  #totalTrades = 0;
+  #successfulTrades = 0;
+  #failedTrades = 0;
+  #profitLoss = 0;
+  #startingBalanceUsd = 0;
+  #currentBalanceUsd = 0;
+
+  // Token-specific parameters
+  #tokenVolatility = {};
+  #tokenSlippageSettings = {};
+  #minimumViableAmounts = {};
+
+  // Cache and storage
+  #tokenPriceCache = new Map();
+  #tokenDecimalCache = new Map();
+  #cachedFeeEstimate = null;
+  #priceCacheTTL = 60 * 1000; // 60 seconds
+  #dailyBalances = [];
+  #tradeHistory = [];
+  #maxTradeHistoryLength = 1000;
+
+  // Network parameters
+  #maxTransactionRetries = 3;
+  #transactionTimeoutMs = 60000; // 60 seconds
+  #rpcHealthTimeout = 5000; // 5 seconds
+
+  // Storage and logs
+  #dataDir;
+  #logsDir;
+  #notificationHandlers = [];
+
+  // Token registry
+  #tokenRegistry = {
+    'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    'SOL': 'So11111111111111111111111111111111111111112',
+    'BONK': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+    'MSOL': 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
+    'SAMO': '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
+    'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+    'JUP': 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  };
+
+  /**
+  * Create a new Enhanced Solana Bot
+  * @param {Object} config Configuration options 
+  */
+  constructor(config) {
+    // Initialize circuit breakers
+    this.#jupiterQuoteCircuitBreaker = new CircuitBreaker(60000, 5, 30000);
+    this.#jupiterSwapCircuitBreaker = new CircuitBreaker(60000, 3, 60000);
+
+    // Set up RPC endpoints with Helius as default
+    if (!config.rpcEndpoint) {
+      config.rpcEndpoint = this.#heliusMainnetRpc;
+    }
+
+    // Support multiple RPC endpoints
+    this.#rpcEndpoints = Array.isArray(config.rpcEndpoint) 
+      ? config.rpcEndpoint 
+      : [config.rpcEndpoint];
+
+    if (this.#rpcEndpoints.length === 0) {
+      throw new Error('At least one RPC endpoint is required');
+    }
+
+    // Override API key if provided
+    if (config.heliusApiKey) {
+      this.#heliusApiKey = config.heliusApiKey;
+      this.#heliusMainnetRpc = `https://mainnet.helius-rpc.com/?api-key=${this.#heliusApiKey}`;
+    }
+
+    // Configure directories for logs and storage
+    this.#dataDir = config.dataDir || path.join(os.homedir(), '.solana-bot');
+    this.#logsDir = path.join(this.#dataDir, 'logs');
+    this.#setupDirectories();
+
+    // Load private key securely
+    try {
+      let privateKeyData;
+      if (config.privateKeyPath) {
+        privateKeyData = fs.readFileSync(config.privateKeyPath, 'utf8').trim();
+        // Handle different formats (hex, base58, JSON, etc.)
+        if (privateKeyData.startsWith('[') && privateKeyData.endsWith(']')) {
+          // Array format
+          privateKeyData = JSON.parse(privateKeyData);
+        } else if (privateKeyData.includes(',')) {
+          // CSV format
+          privateKeyData = privateKeyData.split(',').map(num => parseInt(num.trim()));
+        }
+      } else {
+        privateKeyData = config.privateKey;
+      }
+      
+      // Convert private key based on format
+      if (typeof privateKeyData === 'string') {
+        // Check if it's base58 format (Solana CLI default)
+        if (privateKeyData.match(/^[A-HJ-NP-Za-km-z1-9]*$/)) {
+          privateKeyData = bs58.decode(privateKeyData);
+        } else {
+          // Assume hex format
+          privateKeyData = Buffer.from(privateKeyData, 'hex');
+        }
+      }
+
+      this.#wallet = Keypair.fromSecretKey(
+        Array.isArray(privateKeyData) ? Uint8Array.from(privateKeyData) : privateKeyData
+      );
+    } catch (error) {
+      throw new Error(`Invalid private key: ${error.message}`);
+    }
+
+    // Configure strategy parameters
+    this.#riskPercentage = config.riskPercentage !== undefined ? parseFloat(config.riskPercentage) : this.#riskPercentage;
+    this.#minProfitThreshold = config.minProfitThreshold !== undefined ? parseFloat(config.minProfitThreshold) : this.#minProfitThreshold;
+    this.#stopLossPercentage = config.stopLossPercentage !== undefined ? parseFloat(config.stopLossPercentage) : this.#stopLossPercentage;
+    this.#dailyLossLimit = config.dailyLossLimit !== undefined ? parseFloat(config.dailyLossLimit) : this.#dailyLossLimit;
+    this.#maxPriceImpact = config.maxPriceImpact !== undefined ? parseFloat(config.maxPriceImpact) : this.#maxPriceImpact;
+    this.#dailyMoverThreshold = config.dailyMoverThreshold !== undefined ? parseFloat(config.dailyMoverThreshold) : this.#dailyMoverThreshold;
+
+    // Strategy allocation
+    if (config.dailyMoversAllocation !== undefined && config.arbitrageAllocation !== undefined) {
+      const total = parseFloat(config.dailyMoversAllocation) + parseFloat(config.arbitrageAllocation);
+      if (total <= 0) throw new Error('Invalid allocation total');
+      this.#dailyMoversAllocation = (parseFloat(config.dailyMoversAllocation) / total) * 100;
+      this.#arbitrageAllocation = (parseFloat(config.arbitrageAllocation) / total) * 100;
+    }
+
+    // Configure trading pairs
+    this.#tradingPairs = config.pairs && Array.isArray(config.pairs) && config.pairs.length > 0 
+      ? config.pairs 
+      : ['USDC-SOL', 'USDC-BONK', 'SOL-BONK', 'USDC-SAMO', 'SOL-SAMO', 'USDC-JUP', 'SOL-JUP'];
+
+    // Configure simulation mode
+    this.#simulationMode = config.simulationMode !== false;
+    
+    // Import custom token registry if provided
+    if (config.tokenRegistry && typeof config.tokenRegistry === 'object') {
+      this.#tokenRegistry = { ...this.#tokenRegistry, ...config.tokenRegistry };
+    }
+
+    // Configure token-specific parameters
+    this.#initializeTokenParameters();
+
+    // Initialize connection pool
+    this.#initializeConnectionPool();
+  }
+
+  /**
+   * Initialize token-specific parameters
+   * @private
+   */
+  #initializeTokenParameters() {
+    // Default volatility settings (higher = more volatile)
+    this.#tokenVolatility = {
+      [this.#tokenRegistry.SOL]: 0.7,
+      [this.#tokenRegistry.BONK]: 1.5,
+      [this.#tokenRegistry.MSOL]: 0.6,
+      [this.#tokenRegistry.SAMO]: 1.2,
+      [this.#tokenRegistry.USDC]: 0.05,
+      [this.#tokenRegistry.USDT]: 0.05,
+      [this.#tokenRegistry.JUP]: 0.9,
+    };
+
+    // Token-specific slippage settings (% values)
+    this.#tokenSlippageSettings = {
+      [this.#tokenRegistry.SOL]: 0.7,
+      [this.#tokenRegistry.BONK]: 2.0,
+      [this.#tokenRegistry.MSOL]: 0.6,
+      [this.#tokenRegistry.SAMO]: 1.5,
+      [this.#tokenRegistry.USDC]: 0.1,
+      [this.#tokenRegistry.USDT]: 0.1,
+      [this.#tokenRegistry.JUP]: 1.0,
+    };
+
+    // Minimum viable amounts in USD (to avoid dust)
+    this.#minimumViableAmounts = {
+      [this.#tokenRegistry.SOL]: 0.001,
+      [this.#tokenRegistry.BONK]: 50000,
+      [this.#tokenRegistry.MSOL]: 0.001,
+      [this.#tokenRegistry.SAMO]: 1,
+      [this.#tokenRegistry.USDC]: 0.1,
+      [this.#tokenRegistry.USDT]: 0.1,
+      [this.#tokenRegistry.JUP]: 0.2,
+    };
+  }
+
+  /**
+   * Initialize connection pool with health checks
+   * @private
+   */
+  async #initializeConnectionPool() {
+    this.log('Initializing RPC connection pool...');
+    
+    // Check health of all endpoints
+    const healthResults = await Promise.all(
+      this.#rpcEndpoints.map(async (endpoint, index) => {
+        try {
+          const connection = new Connection(endpoint, {
+            commitment: 'confirmed',
+            confirmTransactionInitialTimeout: this.#transactionTimeoutMs,
+            disableRetryOnRateLimit: false,
+          });
+          
+          const startTime = Date.now();
+          await Promise.race([
+            connection.getVersion(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), this.#rpcHealthTimeout)
+            )
+          ]);
+          const responseTime = Date.now() - startTime;
+          
+          return { 
+            endpoint, 
+            connection, 
+            healthy: true, 
+            responseTime,
+            index 
+          };
+        } catch (error) {
+          this.log(`Endpoint ${endpoint} is unhealthy: ${error.message}`, 'warn');
+          return { 
+            endpoint, 
+            healthy: false, 
+            responseTime: Infinity,
+            index 
+          };
+        }
+      })
+    );
+    
+    // Filter for healthy endpoints and sort by response time
+    const healthyEndpoints = healthResults
+      .filter(result => result.healthy)
+      .sort((a, b) => a.responseTime - b.responseTime);
+    
+    if (healthyEndpoints.length === 0) {
+      throw new Error('No healthy RPC endpoints available');
+    }
+    
+    // Create connection pool with all healthy endpoints
+    this.#connectionPool = healthyEndpoints.map(result => result.connection);
+    
+    // Use the fastest endpoint as default
+    this.#connection = this.#connectionPool[0];
+    this.#currentRpcIndex = healthyEndpoints[0].index;
+    
+    this.log(`Selected ${this.#rpcEndpoints[this.#currentRpcIndex]} as primary endpoint (${healthyEndpoints[0].responseTime}ms response time)`);
+    
+    return this.#connection;
+  }
+
+  /**
+   * Create necessary directories for the bot
+   * @private 
+   */
+  #setupDirectories() {
+    try {
+      [
+        this.#dataDir,
+        this.#logsDir,
+        path.join(this.#dataDir, 'transactions')
+      ].forEach(dir => {
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+      });
+    } catch (error) {
+      console.error(`Failed to create directories: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add a notification handler to receive bot updates
+   * @param {Function} handler Notification handler function 
+   */
+  addNotificationHandler(handler) {
+    if (typeof handler === 'function') {
+      this.#notificationHandlers.push(handler);
+    }
+  }
+
+  /**
+   * Send notification to all registered handlers
+   * @param {string} message Message to send
+   * @param {string} level Log level for filtering
+   * @private 
+   */
+  notify(message, level = 'info') {
+    this.log(message, level);
+    this.#notificationHandlers.forEach(handler => {
+      try {
+        if (typeof handler === 'function') {
+          handler(message, level);
+        } else if (handler && typeof handler.send === 'function') {
+          handler.send(message, level);
+        }
+      } catch (e) {
+        console.error('Notification handler error:', e);
+      }
+    });
+  }
+
+  /**
+   * Log a message with timestamp and level
+   * @param {string} message Message to log
+   * @param {string} level Log level 
+   */
+  log(message, level = 'info') {
+    const timestamp = new Date().toISOString();
+    const formattedMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+    console.log(formattedMessage);
+    
+    // Queue log write instead of blocking
+    this.#queueFileOperation(async () => {
+      try {
+        const logFile = path.join(this.#logsDir, `bot-${new Date().toISOString().split('T')[0]}.log`);
+        await appendFileAsync(logFile, formattedMessage + '\n');
+      } catch (e) {
+        console.error('Failed to write to log file:', e.message);
+      }
+    });
+  }
+
+  /**
+   * Queue a file operation to avoid concurrent writes
+   * @param {Function} operation Async operation to queue
+   * @private
+   */
+  #queueFileOperation(operation) {
+    this.#writeQueue.push(operation);
+    
+    // Start processing the queue if not already processing
+    if (!this.#isProcessingQueue) {
+      this.#processWriteQueue();
+    }
+  }
+
+  /**
+   * Process the file operation queue
+   * @private
+   */
+  async #processWriteQueue() {
+    if (this.#isProcessingQueue || this.#writeQueue.length === 0) {
+      return;
+    }
+    
+    this.#isProcessingQueue = true;
+    
+    try {
+      while (this.#writeQueue.length > 0) {
+        const operation = this.#writeQueue.shift();
+        await operation();
+      }
+    } catch (error) {
+      console.error('Error processing write queue:', error.message);
+    } finally {
+      this.#isProcessingQueue = false; // Ensure flag is reset even on error
+    }
+  }
+
+  /**
+   * Convert mint address to human-readable symbol
+   * @param {string} mint Token mint address
+   * @returns {string} Token symbol or shortened address
+   * @private 
+   */
+  #mintToSymbol(mint) {
+    return Object.entries(this.#tokenRegistry).find(([, addr]) => addr === mint)?.[0] || mint.slice(0, 5) + '...';
+  }
+
+  /**
+   * Convert token symbol to mint address
+   * @param {string} symbol Token symbol
+   * @returns {string} Token mint address
+   * @private 
+   */
+  #symbolToMint(symbol) {
+    return this.#tokenRegistry[symbol.toUpperCase()] || symbol;
+  }
+
+  /**
+   * Parse a trading pair string into mint addresses
+   * @param {string} pair Trading pair (e.g. "USDC-SOL")
+   * @returns {string[]} Array of mint addresses [fromMint, toMint]
+   * @private 
+   */
+  #parseTradingPair(pair) {
+    const [fromSymbol, toSymbol] = pair.split('-');
+    return [this.#symbolToMint(fromSymbol), this.#symbolToMint(toSymbol)];
+  }
+
+  /**
+   * Check if a token is a stablecoin
+   * @param {string} mint Token mint address
+   * @returns {boolean} True if the token is a stablecoin
+   * @private 
+   */
+  #isStablecoin(mint) {
+    const stablecoins = [
+      this.#tokenRegistry.USDC,
+      this.#tokenRegistry.USDT,
+    ];
+    return stablecoins.includes(mint);
+  }
+
+  /**
+   * Get token decimals from metadata or cache
+   * @param {string} mint Token mint address
+   * @returns {Promise<number>} Token decimals 
+   */
+  async getTokenDecimals(mint) {
+    // Check cache first
+    if (this.#tokenDecimalCache.has(mint)) {
+      return this.#tokenDecimalCache.get(mint);
+    }
+
+    // Special case for SOL
+    if (mint === this.#tokenRegistry.SOL) {
+      this.#tokenDecimalCache.set(mint, 9);
+      return 9;
+    }
+
+    try {
+      // Get token metadata from Solana
+      const info = await this.#connection.getParsedAccountInfo(new PublicKey(mint));
+      
+      if (info && info.value && info.value.data && 'parsed' in info.value.data) {
+        const parsedData = info.value.data.parsed;
+        if (parsedData && parsedData.info && parsedData.info.decimals) {
+          const decimals = parsedData.info.decimals;
+          this.#tokenDecimalCache.set(mint, decimals);
+          return decimals;
+        }
+      }
+      
+      // Fallbacks for common tokens if metadata fetch fails
+      const commonDecimals = {
+        [this.#tokenRegistry.USDC]: 6,
+        [this.#tokenRegistry.USDT]: 6,
+        [this.#tokenRegistry.BONK]: 5,
+        [this.#tokenRegistry.MSOL]: 9,
+        [this.#tokenRegistry.SAMO]: 9,
+        [this.#tokenRegistry.JUP]: 6,
+      };
+      
+      if (commonDecimals[mint]) {
+        this.#tokenDecimalCache.set(mint, commonDecimals[mint]);
+        return commonDecimals[mint];
+      }
+      
+      // Default to 9 decimals if we can't determine
+      this.#tokenDecimalCache.set(mint, 9);
+      return 9;
+    } catch (error) {
+      // If RPC error, try switching endpoints
+      if (error.message.includes('rate limit') || error.message.includes('429')) {
+        await this.#switchRpcEndpoint();
+        try {
+          const info = await this.#connection.getParsedAccountInfo(new PublicKey(mint));
+          if (info?.value?.data?.parsed?.info?.decimals) {
+            const decimals = info.value.data.parsed.info.decimals;
+            this.#tokenDecimalCache.set(mint, decimals);
+            return decimals;
+          }
+        } catch {}
+      }
+      
+      // Default to 9 decimals
+      this.#tokenDecimalCache.set(mint, 9);
+      return 9;
+    }
+  }
+
+  /**
+   * Get token balance
+   * @param {string} mint Token mint address
+   * @returns {Promise<number>} Token balance 
+   */
+  async getTokenBalance(mint) {
+    const MAX_RETRIES = 3;
+    for (let retries = 0; retries < MAX_RETRIES; retries++) {
+      try {
+        if (mint === this.#tokenRegistry.SOL) {
+          return (await this.#connection.getBalance(this.#wallet.publicKey)) / 1e9;
+        }
+
+        const tokenAccount = await getAssociatedTokenAddressSync(
+          new PublicKey(mint),
+          this.#wallet.publicKey,
+          false,
+          TOKEN_PROGRAM_ID
+        );
+
+        try {
+          const info = await this.#connection.getTokenAccountBalance(tokenAccount);
+          return parseFloat(info.value.amount) / (10 ** info.value.decimals);
+        } catch (e) {
+          if (e.message.includes('Account not found') || e.message.includes('could not find account')) {
+            return 0; // Non-existent ATA = 0 balance
+          }
+          throw e;
+        }
+      } catch (e) {
+        if (retries + 1 === MAX_RETRIES) {
+          this.log(`Failed to get balance for ${this.#mintToSymbol(mint)}: ${e.message}`, 'error');
+          
+          // Try switching RPC endpoints for last attempt
+          if (this.#rpcEndpoints.length > 1) {
+            await this.#switchRpcEndpoint();
+            try {
+              if (mint === this.#tokenRegistry.SOL) {
+                return (await this.#connection.getBalance(this.#wallet.publicKey)) / 1e9;
+              }
+              const tokenAccount = await getAssociatedTokenAddressSync(
+                new PublicKey(mint),
+                this.#wallet.publicKey,
+                false,
+                TOKEN_PROGRAM_ID
+              );
+              const info = await this.#connection.getTokenAccountBalance(tokenAccount);
+              return parseFloat(info.value.amount) / (10 ** info.value.decimals);
+            } catch {
+              return this.#inStopLossMode ? 0.01 : 0; // In stop loss mode, return small non-zero to avoid dust check
+            }
+          }
+          return 0;
+        }
+
+        // Exponential backoff
+        const backoffMs = Math.pow(2, retries) * 1000;
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Estimate transaction fee based on network conditions including priority fees
+   * @returns {Promise<number>} Estimated fee in lamports
+   * @private 
+   */
+  async #estimateTransactionFee() {
+    try {
+      // Use cached estimate if available and not expired
+      const now = Date.now();
+      if (this.#cachedFeeEstimate && now < this.#cachedFeeEstimate.expiresAt) {
+        return this.#cachedFeeEstimate.fee;
+      }
+
+      // Get recent blockhash and fee calculator
+      const { feeCalculator, blockhash } = await this.#connection.getRecentBlockhash('finalized');
+
+      // Base fee in lamports
+      const baseFee = feeCalculator ? feeCalculator.lamportsPerSignature : 5000;
+
+      // Get priority fee estimates
+      let priorityFee = 0;
+      try {
+        const priorityFeeResponse = await this.#connection.getRecentPrioritizationFees();
+        if (priorityFeeResponse && priorityFeeResponse.length > 0) {
+          // Use market volatility to determine percentile for fees
+          const marketVolatility = parseFloat(this.#getStoredValue('marketVolatility') || '0');
+          
+          const sortedFees = priorityFeeResponse
+            .map(item => item.prioritizationFee)
+            .sort((a, b) => a - b);
+          
+          let percentileIndex;
+          if (marketVolatility > 10) {
+            // High volatility - use higher fees to ensure execution
+            percentileIndex = Math.floor(sortedFees.length * 0.75); // 75th percentile
+          } else if (marketVolatility > 5) {
+            // Medium volatility - use median
+            percentileIndex = Math.floor(sortedFees.length * 0.5); // Median
+          } else {
+            // Low volatility - save on fees
+            percentileIndex = Math.floor(sortedFees.length * 0.25); // 25th percentile
+          }
+          
+          priorityFee = sortedFees[percentileIndex];
+          
+          // Add a small buffer but don't overpay
+          priorityFee = Math.ceil(priorityFee * 1.05);
+        }
+      } catch (e) {
+        priorityFee = 1000; // Default moderate priority fee
+      }
+
+      // Calculate final fee estimate
+      const estimatedFee = Math.ceil(baseFee + priorityFee);
+
+      // Cache this estimate
+      this.#cachedFeeEstimate = {
+        fee: estimatedFee,
+        timestamp: now,
+        expiresAt: now + 10000, // 10 second cache
+        blockhash
+      };
+
+      return estimatedFee;
+    } catch (error) {
+      return 15000; // Safe default 
+    }
+  }
+
+  /**
+   * Get token price from API or cache with improved error handling
+   * @param {string} mint Token mint address
+   * @returns {Promise<number>} Token price in USD 
+   */
+  async getTokenPrice(mint) {
+    try {
+      // Check cache first
+      const cached = this.#tokenPriceCache.get(mint);
+      const now = Date.now();
+      if (cached && (now - cached.timestamp) < this.#priceCacheTTL) {
+        return cached.price;
+      }
+
+      // Special case for stablecoins
+      if (this.#isStablecoin(mint)) {
+        this.#tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
+        return 1.0;
+      }
+
+      // Try up to 3 times with different strategies
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          // Use circuit breaker for Jupiter API calls
+          return await this.#jupiterQuoteCircuitBreaker.execute(
+            async () => {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+              try {
+                const response = await fetch(`https://price.jup.ag/v4/price?ids=${mint}`, {
+                  signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error(`Price API error: ${response.status}`);
+                const data = await response.json();
+
+                if (data?.data?.[mint]?.price) {
+                  const price = data.data[mint].price;
+                  this.#tokenPriceCache.set(mint, { price, timestamp: now });
+                  return price;
+                }
+                throw new Error('Invalid price data format');
+              } catch (fetchError) {
+                clearTimeout(timeoutId);
+                throw fetchError;
+              }
+            },
+            async () => {
+              // Fallback when circuit is open
+              return await this.#getTokenPriceFallback(mint);
+            }
+          );
+        } catch (error) {
+          // If last attempt, log and use fallback
+          if (attempt === 2) {
+            this.log(`Error fetching token price for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
+            return await this.#getTokenPriceFallback(mint);
+          }
+          
+          // Otherwise retry with backoff
+          await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 500));
+          
+          // Try switching RPC endpoint between attempts
+          if (attempt === 1) await this.#switchRpcEndpoint();
+        }
+      }
+
+      return await this.#getTokenPriceFallback(mint);
+    } catch (error) {
+      return await this.#getTokenPriceFallback(mint);
+    }
+  }
+
+  /**
+   * Fallback method for token pricing if Jupiter API fails
+   * @param {string} mint Token mint address
+   * @returns {Promise<number>} Token price in USD
+   * @private 
+   */
+  async #getTokenPriceFallback(mint) {
+    try {
+      // Fallbacks for common tokens
+      const fallbackPrices = {
+        [this.#tokenRegistry.SOL]: 150,
+        [this.#tokenRegistry.BONK]: 0.00001,
+        [this.#tokenRegistry.SAMO]: 0.02,
+        [this.#tokenRegistry.MSOL]: 155,
+        [this.#tokenRegistry.JUP]: 0.5,
+      };
+
+      if (fallbackPrices[mint]) {
+        this.log(`Using fallback price for ${this.#mintToSymbol(mint)}: $${fallbackPrices[mint]}`, 'warn');
+        this.#tokenPriceCache.set(mint, {
+          price: fallbackPrices[mint],
+          timestamp: Date.now() - (this.#priceCacheTTL / 2) // Shorter cache time for fallbacks
+        });
+        return fallbackPrices[mint];
+      }
+
+      // If no fallback available, use a very low price to minimize risk
+      return 0.00001;
+    } catch (error) {
+      return 0.00001; // Default fallback price
+    }
+  }
+
+  /**
+   * Get stored value from persistent storage
+   * @param {string} key Storage key
+   * @returns {string|null} Stored value or null
+   * @private 
+   */
+  #getStoredValue(key) {
+    try {
+      const storageFile = path.join(this.#dataDir, 'storage.json');
+      if (!fs.existsSync(storageFile)) {
+        return null;
+      }
+      const data = JSON.parse(fs.readFileSync(storageFile, 'utf8'));
+      return data[key] || null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Store value in persistent storage
+   * @param {string} key Storage key
+   * @param {string} value Value to store
+   * @private 
+   */
+  #setStoredValue(key, value) {
+    this.#queueFileOperation(async () => {
+      try {
+        const storageFile = path.join(this.#dataDir, 'storage.json');
+        let data = {};
+        
+        if (fs.existsSync(storageFile)) {
+          try {
+            data = JSON.parse(fs.readFileSync(storageFile, 'utf8'));
+          } catch (e) {
+            data = {};
+          }
+        }
+        
+        data[key] = value;
+
+        // Write atomically using temporary file
+        const tempFile = `${storageFile}.tmp`;
+        await writeFileAsync(tempFile, JSON.stringify(data, null, 2));
+        await renameAsync(tempFile, storageFile);
+      } catch (error) {
+        this.log(`Error writing to storage: ${error.message}`, 'error');
+      }
+    });
+  }
+
+  /**
+   * Switch to next RPC endpoint - non-recursive implementation to avoid stack overflows
+   * @returns {Promise<boolean>} Success or failure
+   * @private 
+   */
+  async #switchRpcEndpoint() {
+    if (this.#rpcEndpoints.length <= 1) {
+      this.log('No alternative RPC endpoints available', 'warn');
+      return false;
+    }
+
+    const startIndex = this.#currentRpcIndex;
+    const maxAttempts = this.#rpcEndpoints.length;
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      // Move to next endpoint using round-robin
+      this.#currentRpcIndex = (this.#currentRpcIndex + 1) % this.#rpcEndpoints.length;
+      attempts++;
+      
+      const newEndpoint = this.#rpcEndpoints[this.#currentRpcIndex];
+      
+      try {
+        this.log(`Switching to RPC endpoint: ${newEndpoint}`, 'debug');
+        
+        // Create new connection
+        const newConnection = new Connection(newEndpoint, {
+          commitment: 'confirmed',
+          confirmTransactionInitialTimeout: this.#transactionTimeoutMs,
+          disableRetryOnRateLimit: false,
+        });
+        
+        // Verify the connection works before switching
+        const startTime = Date.now();
+        await Promise.race([
+          newConnection.getVersion(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+        ]);
+        const responseTime = Date.now() - startTime;
+        
+        // Connection works, update the current connection
+        this.#connection = newConnection;
+        this.log(`Switched to ${newEndpoint} (${responseTime}ms response time)`, 'info');
+        
+        // Update the connection pool
+        if (this.#connectionPool[this.#currentRpcIndex]) {
+          this.#connectionPool[this.#currentRpcIndex] = newConnection;
+        }
+        
+        // Clear cached fee estimates after changing endpoint
+        this.#cachedFeeEstimate = null;
+        
+        return true;
+      } catch (e) {
+        this.log(`New endpoint ${newEndpoint} is unhealthy, trying next one`, 'warn');
+        // Continue to next iteration to try another endpoint
+      }
+    }
+    
+    // If we've tried all endpoints and none worked, reset to the original
+    this.#currentRpcIndex = startIndex;
+    this.log('Tried all RPC endpoints, none working properly', 'error');
+    return false;
+  }
+
+  /**
+   * Find the best price from available routes with price impact protection
+   * @param {Array} routes Routes information
+   * @param {string} inputMint Input token mint address
+   * @param {string} outputMint Output token mint address
+   * @returns {Object|null} Best route or null if none found
+   * @private 
+   */
+  #findBestPrice(routes, inputMint, outputMint) {
+    if (!routes || routes.length === 0) {
+      return null;
+    }
+
+    // Get token-specific max price impact
+    const tokenVolatilityFactorIn = this.#tokenVolatility[inputMint] || 1.0;
+    const tokenVolatilityFactorOut = this.#tokenVolatility[outputMint] || 1.0;
+    const volatilityFactor = Math.max(tokenVolatilityFactorIn, tokenVolatilityFactorOut);
+    
+    // Adjust price impact threshold based on token volatility
+    const adjustedMaxPriceImpact = this.#maxPriceImpact * volatilityFactor;
+
+    // Remove routes with excessive price impact
+    const filteredRoutes = routes.filter(route => 
+      route.priceImpactPct < adjustedMaxPriceImpact
+    );
+
+    if (filteredRoutes.length === 0) {
+      // If in stop loss mode, proceed anyway to ensure exit
+      if (this.#inStopLossMode) {
+        this.log(`Executing stop-loss despite high price impact`, 'warn');
+        return routes.sort((a, b) => parseFloat(b.outAmount) - parseFloat(a.outAmount))[0];
+      }
+      
+      this.log(`All routes exceed maximum price impact (${adjustedMaxPriceImpact.toFixed(2)}%), rejecting trade`, 'warn');
+      return null;
+    }
+
+    // Sort by expected output in descending order (higher is better)
+    const sortedRoutes = filteredRoutes.sort((a, b) => 
+      parseFloat(b.outAmount) - parseFloat(a.outAmount)
+    );
+    
+    return sortedRoutes[0];
+  }
+
+  /**
+   * Calculate adaptive slippage based on price impact and market volatility
+   * @param {number} priceImpact Price impact percentage
+   * @param {string} inputMint Input token mint
+   * @param {string} outputMint Output token mint
+   * @returns {number} Slippage percentage
+   * @private 
+   */
+  #calculateAdaptiveSlippage(priceImpact, inputMint, outputMint) {
+    // Get token-specific base slippage
+    const inputTokenSlippage = this.#tokenSlippageSettings[inputMint] || 0.5;
+    const outputTokenSlippage = this.#tokenSlippageSettings[outputMint] || 0.5;
+    
+    // Use the higher of the two token slippages as base
+    let slippage = Math.max(inputTokenSlippage, outputTokenSlippage);
+    
+    // Get token volatility factors
+    const inputVolatility = this.#tokenVolatility[inputMint] || 1.0;
+    const outputVolatility = this.#tokenVolatility[outputMint] || 1.0;
+    
+    // Use the higher volatility factor
+    const volatilityFactor = Math.max(inputVolatility, outputVolatility);
+
+    // Adjust slippage based on volatility
+    slippage *= volatilityFactor;
+
+    // Adjust based on price impact
+    if (priceImpact > 1) {
+      slippage += priceImpact * 0.5; // Add 0.5% for each 1% of price impact
+    }
+
+    // Additional adjustment for higher impacts
+    if (priceImpact > 3) {
+      slippage += priceImpact * 0.3; // Add another 0.3% per 1% for high impacts
+    }
+
+    // Cap maximum slippage at 8% for extremely volatile conditions
+    // but allow token-specific overrides for extremely volatile tokens
+    const maxSlippage = volatilityFactor > 2 ? 12 : 8;
+    
+    return Math.min(slippage, maxSlippage);
+  }
+
+  /**
+   * Query Jupiter API for routes with exponential backoff retry
+   * @param {string} inputMint Input token mint address
+   * @param {string} outputMint Output token mint address
+   * @param {number} amount Amount to swap
+   * @param {number} slippageBps Slippage in basis points
+   * @returns {Promise<any>} Jupiter quote response 
+   */
+  async getJupiterQuote(inputMint, outputMint, amount, slippageBps = 50) {
+    // Use token-specific slippage if available
+    const tokenSlippage = this.#tokenSlippageSettings[inputMint] || 
+                         this.#tokenSlippageSettings[outputMint] || 
+                         0.5; // Default 0.5%
+    
+    // Convert slippage from percentage to basis points if not provided
+    if (!slippageBps) {
+      slippageBps = Math.floor(tokenSlippage * 100);
+    }
+    
+    try {
+      // Get token decimals
+      const inputDecimals = await this.getTokenDecimals(inputMint);
+      const inputAmount = Math.floor(amount * Math.pow(10, inputDecimals));
+
+      const params = new URLSearchParams({
+        inputMint,
+        outputMint,
+        amount: inputAmount.toString(),
+        slippageBps: slippageBps.toString(),
+        feeBps: '4',
+        onlyDirectRoutes: 'false',
+        asLegacyTransaction: 'false',
+      });
+
+      // Use circuit breaker for Jupiter API
+      return await this.#jupiterQuoteCircuitBreaker.execute(
+        async () => {
+          const MAX_RETRIES = 3;
+          let lastError = null;
+          
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 15000);
+              
+              const response = await fetch(`${this.#jupiterApiUrl}/quote?${params}`, {
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+      
+              if (!response.ok) {
+                throw new Error(`Jupiter API error: ${response.status} ${response.statusText}`);
+              }
+              
+              const quote = await response.json();
+              if (!quote || !quote.outAmount) {
+                throw new Error('Invalid quote response');
+              }
+              
+              return quote;
+            } catch (error) {
+              lastError = error;
+              
+              // Switch RPC endpoint if it's a server error
+              if (error.message.includes('5') || error.message.includes('429')) {
+                await this.#switchRpcEndpoint();
+              }
+              
+              if (attempt < MAX_RETRIES - 1) {
+                // Exponential backoff before retry
+                const backoffMs = Math.pow(2, attempt) * 1000;
+                await new Promise(resolve => setTimeout(resolve, backoffMs));
+              }
+            }
+          }
+          
+          // If we got here, all retries failed
+          throw lastError || new Error('Failed to get Jupiter quote after multiple attempts');
+        },
+        async () => {
+          // Fallback when circuit is open
+          return null;
+        }
+      );
+    } catch (error) {
+      this.log(`Error in getJupiterQuote: ${error.message}`, 'error');
+      return null;
+    }
+  }
+
+  /**
+   * Create swap transaction
+   * @param {Object} route Jupiter route info
+   * @param {number} slippageBps Slippage in basis points
+   * @returns {Promise<Transaction|VersionedTransaction|null>} Transaction object or null 
+   */
+  async #createSwapTransaction(route, slippageBps) {
+    try {
+      // Use circuit breaker for Jupiter swap API
+      return await this.#jupiterSwapCircuitBreaker.execute(
+        async () => {
+          const MAX_RETRIES = 2;
+          let lastError = null;
+          
+          for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 30000);
+              
+              const response = await fetch(`${this.#jupiterApiUrl}/swap`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  route: route,
+                  userPublicKey: this.#wallet.publicKey.toString(),
+                  slippageBps
+                }),
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+      
+              if (!response.ok) {
+                throw new Error(`Jupiter swap API error: ${response.status}`);
+              }
+      
+              const swapData = await response.json();
+              if (!swapData || !swapData.swapTransaction) {
+                throw new Error('No swap transaction received from Jupiter');
+              }
+              
+              // Proper handling for Jupiter v6 transactions
+              try {
+                // First deserialize to determine if it's a versioned transaction
+                const messageBytes = Buffer.from(swapData.swapTransaction, 'base64');
+                
+                // Check if it's a versioned transaction (first byte is 0x80)
+                if ((messageBytes[0] & 0x80) !== 0) {
+                  // It's a versioned transaction
+                  this.log('Processing versioned transaction from Jupiter', 'debug');
+                  const versionedTx = VersionedTransaction.deserialize(messageBytes);
+                  
+                  // Sign the transaction properly
+                  // Use built-in signing for versioned transactions if available
+                  if (typeof versionedTx.sign === 'function') {
+                    versionedTx.sign([this.#wallet]);
+                  } else {
+                    // Manual signing as fallback
+                    const signature = nacl.sign.detached(
+                      versionedTx.message.serialize(),
+                      this.#wallet.secretKey
+                    );
+                    versionedTx.addSignature(this.#wallet.publicKey, signature);
+                  }
+                  return versionedTx;
+                } else {
+                  // It's a legacy transaction
+                  this.log('Processing legacy transaction from Jupiter', 'debug');
+                  const legacyTx = Transaction.from(messageBytes);
+                  
+                  // Partial sign with our wallet
+                  legacyTx.partialSign(this.#wallet);
+                  return legacyTx;
+                }
+              } catch (error) {
+                this.log(`Error processing transaction: ${error.message}`, 'error');
+                throw error;
+              }
+            } catch (error) {
+              lastError = error;
+              
+              if (error.name === 'AbortError') {
+                this.log('Jupiter swap API request timed out', 'warn');
+              } else {
+                this.log(`Error creating swap transaction (attempt ${attempt+1}/${MAX_RETRIES}): ${error.message}`, 'warn');
+              }
+              
+              if (attempt < MAX_RETRIES - 1) {
+                // Switch RPC endpoint if it seems like a server error
+                if (error.message.includes('5') || error.message.includes('429')) {
+                  await this.#switchRpcEndpoint();
+                }
+                
+                // Exponential backoff
+                const backoffMs = Math.pow(2, attempt) * 2000;
+                await new Promise(resolve => setTimeout(resolve, backoffMs));
+              }
+            }
+          }
+          
+          // If we got here, all retries failed
+          throw lastError || new Error('Failed to create swap transaction after multiple attempts');
+        },
+        async () => {
+          // Fallback when circuit is open
+          this.log('Jupiter swap API circuit breaker open, cannot create transaction', 'error');
+          return null;
+        }
+      );
+    } catch (error) {
+      this.log(`Error in createSwapTransaction: ${error.message}`, 'error');
+      return null;
+    }
+  }
+
+  /**
+   * Send and confirm transaction with exponential backoff retries
+   * @param {Transaction|VersionedTransaction} transaction Transaction to send
+   * @returns {Promise<string|null>} Transaction signature or null if failed
+   * @private 
+   */
+  async #sendAndConfirmTransaction(transaction) {
+    const maxRetries = this.#maxTransactionRetries;
+    let currentRetry = 0;
+
+    while (currentRetry < maxRetries) {
+      try {
+        let signature;
+        
+        // Use adaptive timeout based on network congestion
+        const adaptiveTimeoutMs = await this.#getAdaptiveTransactionTimeout();
+        
+        if (transaction instanceof VersionedTransaction) {
+          // Handle versioned transaction
+          signature = await this.#connection.sendTransaction(transaction);
+          
+          // Wait for confirmation with adaptive timeout
+          const confirmedSig = await this.#waitForConfirmation(signature, adaptiveTimeoutMs);
+          
+          if (confirmedSig) {
+            return confirmedSig;
+          }
+          throw new Error('Transaction confirmation timed out');
+        } else {
+          // Handle legacy transaction
+          signature = await sendAndConfirmTransaction(
+            this.#connection,
+            transaction,
+            [this.#wallet],
+            {
+              skipPreflight: false,
+              commitment: 'confirmed',
+              maxRetries: 5,
+              confirmTransactionInitialTimeout: adaptiveTimeoutMs
+            }
+          );
+          return signature;
+        }
+      } catch (error) {
+        currentRetry++;
+        
+        // Check if this is a retryable error
+        const isRetryable = 
+          error.message?.includes('timeout') || 
+          error.message?.includes('block height exceeded') ||
+          error.message?.includes('too many requests') ||
+          error.message?.includes('rate limit') ||
+          error.message?.includes('throttled') ||
+          error.message?.includes('blockhash not found') ||
+          error.message?.includes('503') ||
+          error.message?.includes('500') ||
+          error.message?.includes('429');
+        
+        if (isRetryable && currentRetry < maxRetries) {
+          // Exponential backoff with random jitter
+          const baseDelay = Math.pow(2, currentRetry) * 1000;
+          const jitter = Math.random() * 1000;
+          const delay = baseDelay + jitter;
+          
+          this.log(`Transaction failed, retrying in ${(delay/1000).toFixed(1)}s (attempt ${currentRetry}/${maxRetries}): ${error.message}`, 'warn');
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // If blockhash expired or RPC issue, switch endpoint
+          if (error.message?.includes('blockhash') || 
+              error.message?.includes('5') || 
+              error.message?.includes('429')) {
+            await this.#switchRpcEndpoint();
+          }
+        } else {
+          this.log(`Error sending transaction: ${error.message}`, 'error');
+          return null;
+        }
+      }
+    }
+
+    this.log(`Failed to send transaction after ${maxRetries} attempts`, 'error');
+    return null;
+  }
+
+  /**
+   * Get adaptive transaction timeout based on network conditions
+   * @returns {Promise<number>} Timeout in milliseconds
+   * @private
+   */
+  async #getAdaptiveTransactionTimeout() {
+    try {
+      // Base timeout
+      let timeout = this.#transactionTimeoutMs;
+      
+      // Check network congestion
+      const performanceSamples = await this.#connection.getRecentPerformanceSamples(5);
+      if (performanceSamples && performanceSamples.length > 0) {
+        // Calculate average TPS
+        const averageTps = performanceSamples.reduce((sum, sample) => sum + sample.numTransactions / sample.samplePeriodSecs, 0) / performanceSamples.length;
+        
+        // Adjust timeout based on TPS (lower TPS = network congestion)
+        if (averageTps < 1000) {
+          // High congestion, increase timeout significantly
+          timeout *= 2;
+        } else if (averageTps < 2000) {
+          // Medium congestion, moderate increase
+          timeout *= 1.5;
+        }
+      }
+      
+      return timeout;
+    } catch (error) {
+      // If we can't determine network conditions, use default
+      return this.#transactionTimeoutMs;
+    }
+  }
+
+  /**
+   * Wait for transaction confirmation with adaptive backoff
+   * @param {string} signature Transaction signature
+   * @param {number} timeoutMs Maximum timeout in milliseconds
+   * @returns {Promise<string|null>} Confirmed signature or null if timed out
+   * @private 
+   */
+  async #waitForConfirmation(signature, timeoutMs = this.#transactionTimeoutMs) {
+    const startTime = Date.now();
+    let checkCount = 0;
+    
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        checkCount++;
+        const confirmation = await this.#connection.getSignatureStatus(signature);
+        
+        if (confirmation && confirmation.value && 
+            (confirmation.value.confirmationStatus === 'confirmed' || 
+             confirmation.value.confirmationStatus === 'finalized')) {
+          return signature;
+        }
+        
+        // Adaptive backoff - start with quick checks and then slow down
+        const waitTime = Math.min(2000 * Math.pow(1.5, Math.min(checkCount, 5) - 1), 10000);
+        
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      } catch (error) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+
+    this.log(`Transaction confirmation timed out after ${timeoutMs/1000}s`, 'error');
+    return null; // Timed out
+  }
+
+  /**
+   * Check if token account exists, create if it doesn't
+   * @param {string} mint Token mint address
+   * @returns {Promise<boolean>} True if account exists or was created 
+   */
+  async ensureTokenAccount(mint) {
+    if (mint === this.#tokenRegistry.SOL) {
+      // SOL doesn't need an associated token account
+      return true;
+    }
+
+    try {
+      const mintPubkey = new PublicKey(mint);
+      const associatedTokenAddress = getAssociatedTokenAddressSync(
+        mintPubkey,
+        this.#wallet.publicKey,
+        false,
+        TOKEN_PROGRAM_ID
+      );
+      
+      // Check if account exists
+      const account = await this.#connection.getAccountInfo(associatedTokenAddress);
+      
+      if (account) {
+        return true; // Account exists
+      }
+      
+      // Account doesn't exist, create it
+      this.log(`Creating token account for ${this.#mintToSymbol(mint)}`);
+      
+      const transaction = new Transaction().add(
+        createAssociatedTokenAccountInstruction(
+          this.#wallet.publicKey, // payer
+          associatedTokenAddress, // associated token account
+          this.#wallet.publicKey, // owner
+          mintPubkey, // mint
+          TOKEN_PROGRAM_ID
+        )
+      );
+      
+      // Get recent blockhash
+      const { blockhash } = await this.#connection.getRecentBlockhash('finalized');
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = this.#wallet.publicKey;
+      
+      // Send and confirm transaction
+      const signature = await this.#sendAndConfirmTransaction(transaction);
+      
+      if (!signature) {
+        throw new Error('Failed to create token account');
+      }
+      
+      // Verify account was created
+      for (let i = 0; i < 3; i++) {
+        try {
+          const confirmedAccount = await this.#connection.getAccountInfo(associatedTokenAddress);
+          if (confirmedAccount) {
+            return true;
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (e) {
+          if (i === 2) throw e;
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      throw new Error('Token account creation not confirmed');
+    } catch (error) {
+      // Try one more time with a different RPC endpoint
+      if (this.#rpcEndpoints.length > 1) {
+        try {
+          await this.#switchRpcEndpoint();
+          return await this.ensureTokenAccount(mint);
+        } catch (e) {}
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Calculate total portfolio value
+   * @returns {Promise<number>} Portfolio value in USD 
+   */
+  async calculatePortfolioValue() {
+    try {
+      const uniqueTokens = new Set();
+
+      // Add all tokens from trading pairs
+      this.#tradingPairs.forEach(pair => {
+        const [fromMint, toMint] = this.#parseTradingPair(pair);
+        uniqueTokens.add(fromMint);
+        uniqueTokens.add(toMint);
+      });
+
+      // Add major tokens like USDC, SOL
+      uniqueTokens.add(this.#tokenRegistry.USDC);
+      uniqueTokens.add(this.#tokenRegistry.SOL);
+
+      let totalValue = 0;
+      for (const mint of uniqueTokens) {
+        const balance = await this.getTokenBalance(mint);
+        if (balance > 0) {
+          const price = await this.getTokenPrice(mint);
+          const value = balance * price;
+          totalValue += value;
+        }
+      }
+
+      this.#currentBalanceUsd = totalValue;
+      return totalValue;
+    } catch (e) {
+      this.log(`Portfolio value calculation failed: ${e.message}`, 'error');
+      return this.#currentBalanceUsd || 0;
+    }
+  }
+
+  /**
+   * Track daily balance and calculate P&L
+   * @returns {Promise<number>} Current balance in USD 
+   */
+  async trackDailyBalance() {
+    try {
+      // Calculate current portfolio value
+      const totalBalance = await this.calculatePortfolioValue();
+
+      // Set as daily starting balance if not set yet today
+      const today = new Date().toDateString();
+      const lastBalanceDay = this.#getStoredValue('lastBalanceDay');
+      
+      if (lastBalanceDay !== today) {
+        this.#dailyStartBalance = totalBalance;
+        this.#dailyPnL = 0;
+        this.#setStoredValue('lastBalanceDay', today);
+        this.#setStoredValue('dailyStartBalance', this.#dailyStartBalance.toString());
+        
+        // Store historical balance
+        const balanceRecord = {
+          date: today,
+          balance: totalBalance,
+          change: 0
+        };
+        this.#dailyBalances.push(balanceRecord);
+        if (this.#dailyBalances.length > 30) {
+          this.#dailyBalances = this.#dailyBalances.slice(-30); // Keep only last 30 days
+        }
+        this.#setStoredValue('dailyBalances', JSON.stringify(this.#dailyBalances));
+      } else if (this.#dailyStartBalance === 0) {
+        // If we're restarting the bot during the same day, load saved value
+        const savedBalance = this.#getStoredValue('dailyStartBalance');
+        if (savedBalance) {
+          this.#dailyStartBalance = parseFloat(savedBalance);
+        } else {
+          this.#dailyStartBalance = totalBalance;
+          this.#setStoredValue('dailyStartBalance', this.#dailyStartBalance.toString());
+        }
+      }
+      
+      // Calculate current daily P&L
+      this.#dailyPnL = totalBalance - this.#dailyStartBalance;
+      
+      // Store last known balance
+      this.#setStoredValue('lastKnownBalance', totalBalance.toString());
+      
+      return totalBalance;
+    } catch (error) {
+      const lastKnownBalanceStr = this.#getStoredValue('lastKnownBalance');
+      let lastKnownBalance = 0;
+      
+      if (lastKnownBalanceStr) {
+        lastKnownBalance = parseFloat(lastKnownBalanceStr);
+      }
+      
+      if (this.#dailyStartBalance === 0) {
+        const savedStartBalance = this.#getStoredValue('dailyStartBalance');
+        if (savedStartBalance) {
+          this.#dailyStartBalance = parseFloat(savedStartBalance);
+        } else if (lastKnownBalance > 0) {
+          this.#dailyStartBalance = lastKnownBalance;
+        } else {
+          this.#dailyStartBalance = 1000;
+        }
+      }
+      
+      return lastKnownBalance > 0 ? lastKnownBalance : this.#dailyStartBalance;
+    }
+  }
+
+  /**
+   * Check if we've hit the daily loss limit
+   * @returns {boolean} True if daily loss limit has been reached
+   * @private 
+   */
+  #hasHitDailyLossLimit() {
+    if (this.#dailyStartBalance <= 0) return false;
+    const lossPercentage = (this.#dailyPnL / this.#dailyStartBalance) * 100;
+    return lossPercentage <= -this.#dailyLossLimit;
+  }
+
+  /**
+   * Get stop loss threshold based on token volatility
+   * @param {string} mint Token mint address
+   * @returns {number} Stop loss percentage
+   * @private
+   */
+  #getTokenStopLossThreshold(mint) {
+    const baseStopLoss = this.#stopLossPercentage;
+    const volatilityFactor = this.#tokenVolatility[mint] || 1.0;
+    return baseStopLoss * volatilityFactor;
+  }
+
+  /**
+   * Check if a token has hit its stop loss
+   * @param {string} mint Token mint address
+   * @param {number} currentValueUsd Current value in USD
+   * @returns {Promise<{triggered: boolean, mint?: string, symbol?: string, dropPercentage?: number, highWaterMarkUsd?: number, currentValueUsd?: number}>} Stop loss status 
+   */
+  async checkStopLoss(mint, currentValueUsd) {
+    try {
+      const symbol = this.#mintToSymbol(mint);
+      const stopLossKey = `stopLoss_${mint}`;
+
+      // Get token-specific stop loss threshold
+      const stopLossThreshold = this.#getTokenStopLossThreshold(mint);
+
+      // Get the high-water mark for this token (if it exists)
+      const highWaterMarkStr = this.#getStoredValue(stopLossKey);
+      let highWaterMarkUsd = highWaterMarkStr ? parseFloat(highWaterMarkStr) : 0;
+
+      // If current value is higher than high-water mark, update it
+      if (currentValueUsd > highWaterMarkUsd) {
+        highWaterMarkUsd = currentValueUsd;
+        this.#setStoredValue(stopLossKey, highWaterMarkUsd.toString());
+        return { triggered: false };
+      }
+
+      // Check if we're below stop loss threshold
+      if (highWaterMarkUsd > 0) {
+        const dropPercentage = (1 - (currentValueUsd / highWaterMarkUsd)) * 100;
+        if (dropPercentage >= stopLossThreshold) {
+          this.notify(`⚠️ STOP LOSS TRIGGERED for ${symbol}:`, 'alert');
+          
+          return { 
+            triggered: true, 
+            mint, 
+            symbol,
+            dropPercentage,
+            highWaterMarkUsd,
+            currentValueUsd,
+            threshold: stopLossThreshold
+          };
+        }
+      }
+
+      return { triggered: false };
+    } catch (error) {
+      return { triggered: false };
+    }
+  }
+
+  /**
+   * Execute exit trade for stop loss
+   * @param {string} mint Token mint address to exit
+   * @returns {Promise<boolean>} Success or failure 
+   */
+  async executeStopLossExit(mint) {
+    try {
+      const symbol = this.#mintToSymbol(mint);
+      this.log(`Executing stop loss exit for ${symbol}`);
+      
+      // Set stop loss mode flag for price impact override
+      this.#inStopLossMode = true;
+
+      // Get token balance
+      const balance = await this.getTokenBalance(mint);
+      const minViableAmount = this.#minimumViableAmounts[mint] || 0.001;
+      
+      if (balance <= minViableAmount) {
+        this.log(`No significant balance for ${symbol}, skipping stop loss exit`, 'warn');
+        this.#inStopLossMode = false;
+        return false;
+      }
+
+      // Choose appropriate stable coin as destination
+      const stableMint = this.#tokenRegistry.USDC;
+
+      // Get exit quote - sell 98% of the balance (leave a bit for dust)
+      const exitAmount = balance * 0.98;
+
+      // Log the exit attempt
+      this.log(`Stop loss exit: selling ${exitAmount.toFixed(6)} ${symbol} for USDC`);
+
+      // Get quote for the exit trade
+      const quote = await this.getJupiterQuote(mint, stableMint, exitAmount);
+      if (!quote) {
+        this.log(`Failed to get quote for stop loss exit of ${symbol}`, 'error');
+        this.#inStopLossMode = false;
+        return false;
+      }
+
+      // Ignore profit threshold for stop loss - execute at market price
+      const result = await this.executeTrade(
+        mint,
+        stableMint,
+        exitAmount,
+        quote,
+        'STOP_LOSS'
+      );
+
+      if (result) {
+        // Reset stop loss high-water mark after successful exit
+        this.#setStoredValue(`stopLoss_${mint}`, "0");
+        this.notify(`✅ Stop loss exit completed for ${symbol}`);
+      } else {
+        this.log(`Stop loss exit failed for ${symbol}`, 'error');
+      }
+      
+      this.#inStopLossMode = false;
+      return result;
+    } catch (error) {
+      this.log(`Error executing stop loss exit for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
+      this.#inStopLossMode = false;
+      return false;
+    }
+  }
+
+  /**
+   * Execute a trade with Jupiter
+   * @param {string} inputMint Input token mint
+   * @param {string} outputMint Output token mint
+   * @param {number} amount Amount to swap
+   * @param {Object} quote Jupiter quote
+   * @param {string} strategy Strategy name
+   * @param {number} priceMovement Price movement percentage (for daily movers)
+   * @returns {Promise<boolean>} Success or failure 
+   */
+  async executeTrade(inputMint, outputMint, amount, quote, strategy, priceMovement = 0) {
+    try {
+      const inputSymbol = this.#mintToSymbol(inputMint);
+      const outputSymbol = this.#mintToSymbol(outputMint);
+      const tradeType = strategy === 'ARBITRAGE' ? 'SWAP' : (inputMint === this.#tokenRegistry.USDC ? 'BUY' : 'SELL');
+
+      // Validate minimum viable amount
+      const inputPrice = await this.getTokenPrice(inputMint);
+      const inputValueUsd = amount * inputPrice;
+      const minViableUsd = 0.1; // $0.10 minimum value
+      
+      if (inputValueUsd < minViableUsd) {
+        this.log(`Trade value too small: $${inputValueUsd.toFixed(4)} < $${minViableUsd}`, 'warn');
+        return false;
+      }
+
+      // Get token decimals
+      const inputDecimals = await this.getTokenDecimals(inputMint);
+      const outputDecimals = await this.getTokenDecimals(outputMint);
+
+      // Correctly format amounts with proper decimals
+      const inputAmount = amount;
+      const outputAmount = parseFloat(quote.outAmount) / Math.pow(10, outputDecimals);
+
+      const tradeDetails = {
+        timestamp: new Date().toISOString(),
+        strategy,
+        tradeType,
+        input: {
+          mint: inputMint,
+          symbol: inputSymbol,
+          amount: inputAmount
+        },
+        output: {
+          mint: outputMint,
+          symbol: outputSymbol,
+          amount: outputAmount
+        },
+        priceMovement,
+      };
+
+      this.#totalTrades++;
+
+      // In simulation mode, just log the trade
+      if (this.#simulationMode) {
+        this.notify(`[SIMULATION] [${strategy}] ${tradeType}: ${inputAmount.toFixed(6)} ${inputSymbol} → ${outputAmount.toFixed(6)} ${outputSymbol}`);
+        this.#successfulTrades++;
+
+        // Calculate profit/loss
+        const outputPrice = await this.getTokenPrice(outputMint);
+        const profit = (outputAmount * outputPrice) - (inputAmount * inputPrice);
+        this.#profitLoss += profit;
+        this.#currentBalanceUsd += profit;
+
+        // Add to trade history
+        tradeDetails.status = 'simulated';
+        tradeDetails.profit = profit;
+        this.#addTradeToHistory(tradeDetails);
+        
+        return true;
+      }
+
+      // Check if token accounts exist, create if needed
+      const inputAccountExists = await this.ensureTokenAccount(inputMint);
+      const outputAccountExists = await this.ensureTokenAccount(outputMint);
+
+      if (!inputAccountExists || !outputAccountExists) {
+        this.log(`Failed to ensure token accounts exist`, 'error');
+        this.#failedTrades++;
+        tradeDetails.status = 'failed';
+        tradeDetails.error = 'Token account creation failed';
+        this.#addTradeToHistory(tradeDetails);
+        return false;
+      }
+
+      // Calculate adaptive slippage based on token properties
+      const priceImpact = quote.priceImpactPct || 0;
+      const adaptiveSlippage = this.#calculateAdaptiveSlippage(priceImpact, inputMint, outputMint);
+      const slippageBps = Math.floor(adaptiveSlippage * 100);
+
+      // Create swap transaction
+      const transaction = await this.#createSwapTransaction(quote, slippageBps);
+      if (!transaction) {
+        this.log(`Failed to create swap transaction`, 'error');
+        this.#failedTrades++;
+        tradeDetails.status = 'failed';
+        tradeDetails.error = 'Failed to create transaction';
+        this.#addTradeToHistory(tradeDetails);
+        return false;
+      }
+
+      // Calculate estimated fee before sending
+      const estimatedFeeInLamports = await this.#estimateTransactionFee();
+      const solPrice = await this.getTokenPrice(this.#tokenRegistry.SOL);
+      const estimatedFeeUsd = (estimatedFeeInLamports / 1e9) * solPrice;
+
+      // Send and confirm transaction
+      const txid = await this.#sendAndConfirmTransaction(transaction);
+      if (!txid) {
+        this.log(`Transaction failed to confirm`, 'error');
+        this.#failedTrades++;
+        tradeDetails.status = 'failed';
+        tradeDetails.error = 'Transaction failed to confirm';
+        this.#addTradeToHistory(tradeDetails);
+        return false;
+      }
+
+      // Calculate profit/loss
+      const outputPrice = await this.getTokenPrice(outputMint);
+      const profit = (outputAmount * outputPrice) - (inputAmount * inputPrice);
+      const profitWithFees = profit - estimatedFeeUsd;
+
+      // Add to trade history
+      tradeDetails.status = 'success';
+      tradeDetails.txid = txid;
+      tradeDetails.profit = profitWithFees;
+      tradeDetails.fee = estimatedFeeUsd;
+
+      this.#addTradeToHistory(tradeDetails);
+
+      // Update stats
+      this.#successfulTrades++;
+      this.#profitLoss += profitWithFees;
+
+      // Notify about the trade
+      this.notify(`[${strategy}] ${tradeType} executed: ${inputAmount.toFixed(6)} ${inputSymbol} → ${outputAmount.toFixed(6)} ${outputSymbol} (${profitWithFees >= 0 ? '+' : ''}$${profitWithFees.toFixed(4)})`);
+      
+      return true;
+    } catch (error) {
+      this.log(`Trade execution failed: ${error.message}`, 'error');
+      this.#failedTrades++;
+      return false;
+    }
+  }
+
+  /**
+   * Add trade to history and manage history size
+   * @param {Object} trade Trade details
+   * @private 
+   */
+  #addTradeToHistory(trade) {
+    // Add to in-memory history
+    this.#tradeHistory.push(trade);
+
+    // Limit history size
+    if (this.#tradeHistory.length > this.#maxTradeHistoryLength) {
+      this.#tradeHistory = this.#tradeHistory.slice(-this.#maxTradeHistoryLength);
+    }
+
+    // Queue trade storage to disk
+    this.#queueFileOperation(async () => {
+      try {
+        const tradesFile = path.join(this.#dataDir, 'trades.json');
+        await appendFileAsync(tradesFile, JSON.stringify(trade) + '\n');
+      } catch (error) {
+        this.log(`Error saving trade to history: ${error.message}`, 'error');
+      }
+    });
+
+    // Update trade stats in storage
+    this.#setStoredValue('totalTrades', this.#totalTrades.toString());
+    this.#setStoredValue('successfulTrades', this.#successfulTrades.toString());
+    this.#setStoredValue('failedTrades', this.#failedTrades.toString());
+    this.#setStoredValue('profitLoss', this.#profitLoss.toString());
+  }
+
+  /**
+   * Find arbitrage opportunities and execute trades - optimized version for best profits
+   * @returns {Promise<void>} 
+   */
+  async findArbitrageOpportunities() {
+    if (this.#isArbitrageRunning) return;
+
+    this.#isArbitrageRunning = true;
+
+    try {
+      this.log('Checking arbitrage opportunities...');
+      
+      // Skip if daily loss limit hit
+      if (this.#hasHitDailyLossLimit()) {
+        this.log('Daily loss limit reached, skipping arbitrage', 'warn');
+        return;
+      }
+      
+      // Calculate available capital
+      const portfolioValue = await this.calculatePortfolioValue();
+      const arbitrageCapital = portfolioValue * (this.#arbitrageAllocation / 100);
+      const tradeRiskAmount = arbitrageCapital * (this.#riskPercentage / 100);
+      
+      // Check SOL balance for fees
+      const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
+      if (solBalance < 0.01) {
+        this.log(`Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL`, 'warn');
+        return;
+      }
+      
+      // Get market volatility to adjust profit threshold
+      const marketVolatility = parseFloat(this.#getStoredValue('marketVolatility') || '0');
+      let adjustedProfitThreshold = this.#minProfitThreshold;
+      if (marketVolatility > 10) {
+        adjustedProfitThreshold = this.#minProfitThreshold * 1.5;
+      }
+      
+      // Track potential opportunities
+      let bestOpportunity = {
+        profit: 0,
+        pair: null,
+        fromMint: null,
+        toMint: null,
+        tradeSize: 0,
+        quote: null
+      };
+      
+      // Check for arbitrage across all trading pairs
+      for (const pair of this.#tradingPairs) {
+        try {
+          const [fromMint, toMint] = this.#parseTradingPair(pair);
+          
+          // Skip pairs with recent failed attempts
+          const pairKey = `${fromMint}-${toMint}`;
+          const lastFailTime = parseInt(this.#getStoredValue(`lastFail_${pairKey}`) || '0');
+          const backoffPeriod = parseInt(this.#getStoredValue(`backoff_${pairKey}`) || '60000');
+          
+          if (Date.now() - lastFailTime < backoffPeriod) continue;
+          
+          // Check token balances
+          const fromBalance = await this.getTokenBalance(fromMint);
+          if (fromBalance <= 0) continue;
+          
+          // Check if token has hit stop loss
+          const fromPrice = await this.getTokenPrice(fromMint);
+          const fromValueUsd = fromBalance * fromPrice;
+          
+          const stopLossCheck = await this.checkStopLoss(fromMint, fromValueUsd);
+          if (stopLossCheck.triggered) {
+            await this.executeStopLossExit(fromMint);
+            continue;
+          }
+          
+          // Calculate trade size
+          const minViableAmount = this.#minimumViableAmounts[fromMint] || 0.001;
+          const tradeSize = Math.max(
+            Math.min(tradeRiskAmount / fromPrice, fromBalance * 0.98),
+            minViableAmount
+          );
+          
+          if (tradeSize * fromPrice < 0.1) continue;
+          
+          // Get quote
+          const quote = await this.getJupiterQuote(fromMint, toMint, tradeSize);
+          if (!quote) {
+            // Record failure with exponential backoff
+            const currentBackoff = parseInt(this.#getStoredValue(`backoff_${pairKey}`) || '60000');
+            const newBackoff = Math.min(currentBackoff * 2, 3600000); // Max 1 hour
+            this.#setStoredValue(`lastFail_${pairKey}`, Date.now().toString());
+            this.#setStoredValue(`backoff_${pairKey}`, newBackoff.toString());
+            continue;
+          }
+          
+          // Reset backoff on successful quote
+          this.#setStoredValue(`backoff_${pairKey}`, '60000');
+          
+          // Calculate profit
+          const outAmount = parseFloat(quote.outAmount) / Math.pow(10, await this.getTokenDecimals(toMint));
+          const toPrice = await this.getTokenPrice(toMint);
+          
+          const inputValue = tradeSize * fromPrice;
+          const outputValue = outAmount * toPrice;
+          
+          // Estimate transaction fee
+          const estimatedFeeInLamports = await this.#estimateTransactionFee();
+          const solPrice = await this.getTokenPrice(this.#tokenRegistry.SOL);
+          const transactionFeeUsd = (estimatedFeeInLamports / 1e9) * solPrice;
+          
+          // Calculate net profit after fees
+          const netProfitUsd = outputValue - inputValue - transactionFeeUsd;
+          const netProfitPercentage = (netProfitUsd / inputValue) * 100;
+          
+          // Track best opportunity
+          if (netProfitPercentage > adjustedProfitThreshold && netProfitPercentage > bestOpportunity.profit) {
+            bestOpportunity = {
+              profit: netProfitPercentage,
+              pair,
+              fromMint,
+              toMint,
+              tradeSize,
+              quote,
+              netProfitUsd
+            };
+          }
+        } catch (e) {
+          this.log(`Error checking arbitrage for ${pair}: ${e.message}`, 'error');
+        }
+      }
+      
+      // Execute the best opportunity found
+      if (bestOpportunity.profit > 0) {
+        this.log(`Executing best arbitrage: ${bestOpportunity.pair} with ${bestOpportunity.profit.toFixed(2)}% profit`);
+        await this.executeTrade(
+          bestOpportunity.fromMint, 
+          bestOpportunity.toMint, 
+          bestOpportunity.tradeSize, 
+          bestOpportunity.quote, 
+          'ARBITRAGE'
+        );
+      }
+    } catch (error) {
+      this.log(`Error in arbitrage strategy: ${error.message}`, 'error');
+    } finally {
+      this.#isArbitrageRunning = false;
+    }
+  }
+
+  /**
+   * Get token price movements with market volatility monitoring
+   * @returns {Promise<Map<string, Object>>} Map of token price movements 
+   */
+  async getTokenPriceMovements() {
+    try {
+      // Create set of unique tokens
+      const uniqueTokens = new Set();
+
+      // Add all tokens from trading pairs
+      this.#tradingPairs.forEach(pair => {
+        const [fromMint, toMint] = this.#parseTradingPair(pair);
+        uniqueTokens.add(fromMint);
+        uniqueTokens.add(toMint);
+      });
+
+      // Add major tokens
+      Object.values(this.#tokenRegistry).forEach(mint => uniqueTokens.add(mint));
+
+      // Create comma-separated list of mints
+      const mints = Array.from(uniqueTokens).join(',');
+
+      // Use circuit breaker for Jupiter Price API
+      return await this.#jupiterQuoteCircuitBreaker.execute(
+        async () => {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          
+          try {
+            const response = await fetch(`https://price.jup.ag/v4/price?ids=${mints}`, {
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+    
+            if (!response.ok) throw new Error(`Price API error: ${response.status}`);
+            const data = await response.json();
+    
+            // Process results
+            const movements = new Map();
+            let marketVolatilitySum = 0;
+            let volatileTokenCount = 0;
+            
+            for (const mint of uniqueTokens) {
+              const tokenData = data.data[mint] || {};
+              const priceChange = (tokenData.priceChange24h || 0) * 100;
+              
+              // Track market volatility (excluding stablecoins)
+              if (!this.#isStablecoin(mint) && tokenData.price > 0) {
+                marketVolatilitySum += Math.abs(priceChange);
+                volatileTokenCount++;
+              }
+              
+              movements.set(mint, {
+                priceChange24h: priceChange,
+                volume24h: tokenData.volume24h || 0,
+                price: tokenData.price || 0
+              });
+            }
+            
+            // Calculate average market volatility
+            const avgMarketVolatility = volatileTokenCount > 0 ? 
+              marketVolatilitySum / volatileTokenCount : 0;
+            
+            // Store market volatility for reference
+            this.#setStoredValue('marketVolatility', avgMarketVolatility.toString());
+            
+            return movements;
+          } catch (error) {
+            clearTimeout(timeoutId);
+            throw error;
+          }
+        },
+        async () => {
+          // Fallback when circuit is open
+          return new Map();
+        }
+      );
+    } catch (e) {
+      return new Map();
+    }
+  }
+
+  /**
+   * Find and execute daily movers opportunities
+   * @returns {Promise<void>} 
+   */
+  async findDailyMoversOpportunities() {
+    if (this.#isDailyMoversRunning) return;
+
+    this.#isDailyMoversRunning = true;
+
+    try {
+      this.log('Scanning for daily movers...');
+      
+      // Skip if daily loss limit hit
+      if (this.#hasHitDailyLossLimit()) {
+        this.log('Daily loss limit reached, skipping daily movers', 'warn');
+        return;
+      }
+      
+      // Calculate available capital
+      const portfolioValue = await this.calculatePortfolioValue();
+      const dailyMoverCapital = portfolioValue * (this.#dailyMoversAllocation / 100);
+      const tradeRiskAmount = dailyMoverCapital * (this.#riskPercentage / 100);
+      
+      // Check SOL balance
+      const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
+      if (solBalance < 0.01) {
+        this.log(`Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL`, 'warn');
+        return;
+      }
+      
+      // Get price movements
+      const tokenMovements = await this.getTokenPriceMovements();
+      
+      // Check market volatility and adjust threshold
+      const marketVolatility = parseFloat(this.#getStoredValue('marketVolatility') || '0');
+      let adjustedThreshold = this.#dailyMoverThreshold;
+      
+      if (marketVolatility > 12) {
+        adjustedThreshold = this.#dailyMoverThreshold * 1.5;
+      }
+      
+      // Filter for significant movers
+      const significantMovers = [...tokenMovements.entries()]
+        .filter(([mint, data]) => {
+          // Skip stablecoins
+          if (this.#isStablecoin(mint)) return false;
+          
+          // Skip tokens with insufficient price data
+          if (!data.price || data.price === 0) return false;
+          
+          // Check for significant movement and volume
+          const significantMove = Math.abs(data.priceChange24h) >= adjustedThreshold;
+          const sufficientVolume = data.volume24h > 50000; // $50k minimum volume
+          
+          return significantMove && sufficientVolume;
+        })
+        .sort((a, b) => Math.abs(b[1].priceChange24h) - Math.abs(a[1].priceChange24h));
+      
+      if (significantMovers.length === 0) {
+        return;
+      }
+      
+      // Process each significant mover
+      for (const [mint, data] of significantMovers) {
+        // Determine trade direction:
+        // - Negative price change: BUY (price dropped, expect recovery)
+        // - Positive price change: SELL (price jumped, take profit)
+        const direction = data.priceChange24h <= -adjustedThreshold ? 'BUY' : 'SELL';
+        
+        // For BUY: use USDC as source
+        // For SELL: use the token as source
+        const fromMint = direction === 'BUY' ? this.#tokenRegistry.USDC : mint;
+        const toMint = direction === 'BUY' ? mint : this.#tokenRegistry.USDC;
+        
+        await this.tradeDailyMover(fromMint, toMint, data.priceChange24h, direction, tradeRiskAmount);
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Pause between trades
+      }
+    } catch (error) {
+      this.log(`Error in daily movers strategy: ${error.message}`, 'error');
+    } finally {
+      this.#isDailyMoversRunning = false;
+    }
+  }
+
+  /**
+   * Execute trade for daily mover strategy
+   * @param {string} fromMint From token mint
+   * @param {string} toMint To token mint
+   * @param {number} priceChange Price change percentage
+   * @param {string} direction Trade direction (BUY/SELL)
+   * @param {number} maxTradeSize Maximum trade size in USD
+   * @returns {Promise<boolean>} Success or failure 
+   */
+  async tradeDailyMover(fromMint, toMint, priceChange, direction, maxTradeSize) {
+    try {
+      const fromSymbol = this.#mintToSymbol(fromMint);
+      const toSymbol = this.#mintToSymbol(toMint);
+      
+      this.log(`Evaluating ${direction} opportunity for ${fromSymbol} → ${toSymbol} (${priceChange.toFixed(2)}% move)`);
+      
+      // Check balance
+      const fromBalance = await this.getTokenBalance(fromMint);
+      if (fromBalance <= 0) {
+        return false;
+      }
+      
+      // Check for stop loss
+      const fromPrice = await this.getTokenPrice(fromMint);
+      const fromValueUsd = fromBalance * fromPrice;
+      
+      const stopLossCheck = await this.checkStopLoss(fromMint, fromValueUsd);
+      if (stopLossCheck.triggered) {
+        await this.executeStopLossExit(fromMint);
+        return false;
+      }
+      
+      // Calculate trade size
+      const minViableAmount = this.#minimumViableAmounts[fromMint] || 0.001;
+      const maxSafeAmount = fromBalance * 0.98;
+      
+      // Determine optimal trade size
+      let tradeSize;
+      if (direction === 'BUY') {
+        // For buys, use a percentage of the max trade size to diversify risk
+        const buyPercentage = Math.min(30 + Math.abs(priceChange), 70) / 100; // 30-70% based on price drop
+        tradeSize = Math.min(maxTradeSize * buyPercentage / fromPrice, maxSafeAmount);
+      } else {
+        // For sells, use a higher percentage of available balance to lock in profits
+        const sellPercentage = Math.min(50 + Math.abs(priceChange) / 2, 90) / 100; // 50-90% based on price jump
+        tradeSize = Math.min(maxSafeAmount * sellPercentage, maxTradeSize / fromPrice);
+      }
+      
+      // Ensure minimum viable amount
+      tradeSize = Math.max(tradeSize, minViableAmount);
+      
+      if (tradeSize * fromPrice < 0.1) {
+        return false;
+      }
+      
+      // Get quote
+      const quote = await this.getJupiterQuote(fromMint, toMint, tradeSize);
+      if (!quote) {
+        return false;
+      }
+      
+      // Calculate output
+      const outAmount = parseFloat(quote.outAmount) / Math.pow(10, await this.getTokenDecimals(toMint));
+      const toPrice = await this.getTokenPrice(toMint);
+      
+      // Determine if trade is favorable
+      let shouldTrade = false;
+      
+      if (direction === 'BUY') {
+        // For buys, check execution price vs expected
+        const executionPriceChange = ((tradeSize * fromPrice / outAmount) - toPrice) / toPrice * 100;
+        
+        // Trade is favorable if execution price is within 3% of market price
+        shouldTrade = Math.abs(executionPriceChange) < 3.0;
+        
+        // Additional check for severe price drops (>15%)
+        if (priceChange < -15 && !this.#getStoredValue(`confirmed_drop_${toMint}`)) {
+          // Only buy after confirming the drop in a second scan
+          this.#setStoredValue(`confirmed_drop_${toMint}`, 'true');
+          this.log(`Large price drop for ${toSymbol} (${priceChange.toFixed(2)}%), waiting for confirmation`, 'warn');
+          shouldTrade = false;
+        }
+      } else {
+        // For sells, always execute to lock in profits, unless execution price is terrible
+        const executionPriceChange = (toPrice - (outAmount / tradeSize)) / toPrice * 100;
+        shouldTrade = executionPriceChange < 5.0; // Allow up to 5% slippage for sells
+      }
+      
+      if (shouldTrade) {
+        this.log(`Executing ${direction} for ${
