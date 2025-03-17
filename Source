@@ -58,83 +58,83 @@ class CircuitBreaker {
  */
 class RoninTradingBot {
   // Core configuration
-  #connection;
-  #connectionPool = [];
-  #rpcEndpoints = [];
-  #currentRpcIndex = 0;
-  #wallet;
-  #heliusApiKey = '8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
-  #heliusRpc = 'https://mainnet.helius-rpc.com/?api-key=8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
-  #jupiterApiUrl = 'https://quote-api.jup.ag/v6';
+  connection;
+  connectionPool = [];
+  rpcEndpoints = [];
+  currentRpcIndex = 0;
+  wallet;
+  heliusApiKey = '8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
+  heliusRpc = 'https://mainnet.helius-rpc.com/?api-key=8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
+  jupiterApiUrl = 'https://quote-api.jup.ag/v6';
   
   // Bot state
-  #isRunning = false;
-  #isTradeInProgress = false;
-  #simulationMode = false;
-  #initialInvestment = 0;
-  #lastBalanceCheck = 0;
-  #currentPortfolioValue = 0;
-  #notificationHandlers = [];
-  #discordWebhooks = [];
-  #commandHandlers = new Map();
-  #dailyReportTime = '00:00';
-  #dailyReportSchedule = null;
-  #inStopLossMode = false;
+  isRunning = false;
+  isTradeInProgress = false;
+  simulationMode = false;
+  initialInvestment = 0;
+  lastBalanceCheck = 0;
+  currentPortfolioValue = 0;
+  notificationHandlers = [];
+  discordWebhooks = [];
+  commandHandlers = new Map();
+  dailyReportTime = '00:00';
+  dailyReportSchedule = null;
+  inStopLossMode = false;
   
   // Wallet information
-  #walletType = 'privateKey';
-  #walletAddress = null;
-  #savedWallets = {};
+  walletType = 'privateKey';
+  walletAddress = null;
+  savedWallets = {};
   
   // Demo mode
-  #demoMode = false;
-  #demoFunds = {};
-  #demoTradeHistory = [];
-  #demoProfitLoss = 0;
-  #demoInitialValue = 0;
+  demoMode = false;
+  demoFunds = {};
+  demoTradeHistory = [];
+  demoProfitLoss = 0;
+  demoInitialValue = 0;
   
   // Risk management
-  #maxRiskPercentage = 15; // 15% of total balance per trade
-  #drawdownProtection = 50; // Stop if 50% of initial investment is lost
-  #minProfitThreshold = 0.5; // Minimum profit percentage for arbitrage
-  #stopLossPercentage = 2.5; // Default stop loss percentage
-  #dailyLossLimit = 3; // Daily loss limit percentage
-  #maxPriceImpact = 2.0; // Maximum price impact percentage
+  maxRiskPercentage = 15; // 15% of total balance per trade
+  drawdownProtection = 50; // Stop if 50% of initial investment is lost
+  minProfitThreshold = 0.5; // Minimum profit percentage for arbitrage
+  stopLossPercentage = 2.5; // Default stop loss percentage
+  dailyLossLimit = 3; // Daily loss limit percentage
+  maxPriceImpact = 2.0; // Maximum price impact percentage
   
   // Trade tracking
-  #successfulTrades = 0;
-  #failedTrades = 0;
-  #totalProfitLoss = 0;
-  #tradeHistory = [];
-  #maxTradeHistoryLength = 1000;
-  #dailyStartBalance = 0;
-  #dailyPnL = 0;
-  #dailyBalances = [];
+  successfulTrades = 0;
+  failedTrades = 0;
+  totalProfitLoss = 0;
+  tradeHistory = [];
+  maxTradeHistoryLength = 1000;
+  dailyStartBalance = 0;
+  dailyPnL = 0;
+  dailyBalances = [];
   
   // Strategy parameters
-  #marketMakingActive = false;
-  #arbitrageActive = false; 
-  #liquidityMiningActive = false;
-  #tokenDiscoveryActive = false;
-  #dailyMoverThreshold = 5;
-  #arbitrageAllocation = 40;
-  #dailyMoversAllocation = 60;
-  #spreadPercentage = 1.0; 
-  #liquidityPositions = [];
-  #tokenMovements = new Map();
+  marketMakingActive = false;
+  arbitrageActive = false; 
+  liquidityMiningActive = false;
+  tokenDiscoveryActive = false;
+  dailyMoverThreshold = 5;
+  arbitrageAllocation = 40;
+  dailyMoversAllocation = 60;
+  spreadPercentage = 1.0; 
+  liquidityPositions = [];
+  tokenMovements = new Map();
   
   // Scanning parameters
-  #discoveredTokens = new Map();
-  #scanDuration = 120000; // 2 minute minimum scan time
-  #minLiquidity = 50000; // $50K minimum liquidity
-  #minVolume = 10000; // $10K minimum 24h volume
-  #maxScanTokens = 1000; // Maximum tokens to scan
-  #scanResults = null;
-  #opportunityScoreThreshold = 35;
-  #multiDexScan = true;
+  discoveredTokens = new Map();
+  scanDuration = 120000; // 2 minute minimum scan time
+  minLiquidity = 50000; // $50K minimum liquidity
+  minVolume = 10000; // $10K minimum 24h volume
+  maxScanTokens = 1000; // Maximum tokens to scan
+  scanResults = null;
+  opportunityScoreThreshold = 35;
+  multiDexScan = true;
   
   // Token registry for common tokens
-  #tokenRegistry = {
+  tokenRegistry = {
     'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     'SOL': 'So11111111111111111111111111111111111111112',
     'BONK': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
@@ -145,41 +145,41 @@ class RoninTradingBot {
   };
   
   // Token-specific parameters
-  #tokenVolatility = {};
-  #tokenSlippage = {};
-  #minimumViableAmounts = {};
+  tokenVolatility = {};
+  tokenSlippage = {};
+  minimumViableAmounts = {};
   
   // DEX connectors
-  #dexConnectors = new Map();
-  #supportedDexs = ['jupiter', 'raydium', 'orca'];
+  dexConnectors = new Map();
+  supportedDexs = ['jupiter', 'raydium', 'orca'];
   
   // Caches for performance
-  #tokenDecimalCache = new Map();
-  #tokenPriceCache = new Map();
-  #cachedFeeEstimate = null;
-  #priceCacheTTL = 60 * 1000; // 60 seconds
+  tokenDecimalCache = new Map();
+  tokenPriceCache = new Map();
+  cachedFeeEstimate = null;
+  priceCacheTTL = 60 * 1000; // 60 seconds
   
   // Circuit breakers
-  #jupiterQuoteCircuitBreaker;
-  #jupiterSwapCircuitBreaker;
+  jupiterQuoteCircuitBreaker;
+  jupiterSwapCircuitBreaker;
   
   // File operation queue
-  #writeQueue = [];
-  #isProcessingQueue = false;
+  writeQueue = [];
+  isProcessingQueue = false;
   
   // Rate limiting
-  #premiumApiLastUsed = 0;
-  #premiumApiInterval = 60 * 60 * 1000; // 1 hour in milliseconds
+  premiumApiLastUsed = 0;
+  premiumApiInterval = 60 * 60 * 1000; // 1 hour in milliseconds
   
   // Network parameters
-  #maxTransactionRetries = 3;
-  #transactionTimeoutMs = 60000; // 60 seconds
-  #rpcHealthTimeout = 5000; // 5 seconds
+  maxTransactionRetries = 3;
+  transactionTimeoutMs = 60000; // 60 seconds
+  rpcHealthTimeout = 5000; // 5 seconds
   
   // Storage and logs
-  #dataDir;
-  #logsDir;
-  #transactionsDir;
+  dataDir;
+  logsDir;
+  transactionsDir;
   
   /**
    * Create a new Ronin Trading Bot
@@ -187,61 +187,61 @@ class RoninTradingBot {
    */
   constructor(config = {}) {
     // Initialize circuit breakers
-    this.#jupiterQuoteCircuitBreaker = new CircuitBreaker(60000, 5, 30000);
-    this.#jupiterSwapCircuitBreaker = new CircuitBreaker(60000, 3, 60000);
+    this.jupiterQuoteCircuitBreaker = new CircuitBreaker(60000, 5, 30000);
+    this.jupiterSwapCircuitBreaker = new CircuitBreaker(60000, 3, 60000);
     
     // Set up data directories
-    this.#dataDir = config.dataDir || path.join(os.homedir(), '.ronin-bot');
-    this.#logsDir = path.join(this.#dataDir, 'logs');
-    this.#transactionsDir = path.join(this.#dataDir, 'transactions');
-    this.#setupDirectories();
+    this.dataDir = config.dataDir || path.join(os.homedir(), '.ronin-bot');
+    this.logsDir = path.join(this.dataDir, 'logs');
+    this.transactionsDir = path.join(this.dataDir, 'transactions');
+    this.setupDirectories();
     
     // Set default demo funds
-    this.#demoFunds = {
-      [this.#tokenRegistry.USDC]: 1000,
-      [this.#tokenRegistry.SOL]: 3,
-      [this.#tokenRegistry.BONK]: 50000000,
-      [this.#tokenRegistry.MSOL]: 1,
-      [this.#tokenRegistry.SAMO]: 1000,
-      [this.#tokenRegistry.JUP]: 100
+    this.demoFunds = {
+      [this.tokenRegistry.USDC]: 1000,
+      [this.tokenRegistry.SOL]: 3,
+      [this.tokenRegistry.BONK]: 50000000,
+      [this.tokenRegistry.MSOL]: 1,
+      [this.tokenRegistry.SAMO]: 1000,
+      [this.tokenRegistry.JUP]: 100
     };
     
     // Override API key if provided
     if (config.heliusApiKey) {
-      this.#heliusApiKey = config.heliusApiKey;
-      this.#heliusRpc = `https://mainnet.helius-rpc.com/?api-key=${this.#heliusApiKey}`;
+      this.heliusApiKey = config.heliusApiKey;
+      this.heliusRpc = `https://mainnet.helius-rpc.com/?api-key=${this.heliusApiKey}`;
     }
     
     // Set up RPC endpoints with Helius as default
-    this.#rpcEndpoints = Array.isArray(config.rpcEndpoint) 
+    this.rpcEndpoints = Array.isArray(config.rpcEndpoint) 
       ? config.rpcEndpoint 
-      : config.rpcEndpoint ? [config.rpcEndpoint] : [this.#heliusRpc];
+      : config.rpcEndpoint ? [config.rpcEndpoint] : [this.heliusRpc];
     
-    if (this.#rpcEndpoints.length === 0) {
+    if (this.rpcEndpoints.length === 0) {
       throw new Error('At least one RPC endpoint is required');
     }
     
     // Initialize connection pool
-    this.#initializeConnectionPool();
+    this.initializeConnectionPool();
     
     // Set simulation mode
-    this.#simulationMode = config.simulationMode === true;
+    this.simulationMode = config.simulationMode === true;
     
     // Configure risk parameters
-    if (config.maxRiskPercentage) this.#maxRiskPercentage = parseFloat(config.maxRiskPercentage);
-    if (config.drawdownProtection) this.#drawdownProtection = parseFloat(config.drawdownProtection);
-    if (config.minProfitThreshold) this.#minProfitThreshold = parseFloat(config.minProfitThreshold);
-    if (config.stopLossPercentage) this.#stopLossPercentage = parseFloat(config.stopLossPercentage);
-    if (config.dailyLossLimit) this.#dailyLossLimit = parseFloat(config.dailyLossLimit);
-    if (config.maxPriceImpact) this.#maxPriceImpact = parseFloat(config.maxPriceImpact);
-    if (config.dailyMoverThreshold) this.#dailyMoverThreshold = parseFloat(config.dailyMoverThreshold);
+    if (config.maxRiskPercentage) this.maxRiskPercentage = parseFloat(config.maxRiskPercentage);
+    if (config.drawdownProtection) this.drawdownProtection = parseFloat(config.drawdownProtection);
+    if (config.minProfitThreshold) this.minProfitThreshold = parseFloat(config.minProfitThreshold);
+    if (config.stopLossPercentage) this.stopLossPercentage = parseFloat(config.stopLossPercentage);
+    if (config.dailyLossLimit) this.dailyLossLimit = parseFloat(config.dailyLossLimit);
+    if (config.maxPriceImpact) this.maxPriceImpact = parseFloat(config.maxPriceImpact);
+    if (config.dailyMoverThreshold) this.dailyMoverThreshold = parseFloat(config.dailyMoverThreshold);
 
     // Strategy allocation
     if (config.dailyMoversAllocation !== undefined && config.arbitrageAllocation !== undefined) {
       const total = parseFloat(config.dailyMoversAllocation) + parseFloat(config.arbitrageAllocation);
       if (total <= 0) throw new Error('Invalid allocation total');
-      this.#dailyMoversAllocation = (parseFloat(config.dailyMoversAllocation) / total) * 100;
-      this.#arbitrageAllocation = (parseFloat(config.arbitrageAllocation) / total) * 100;
+      this.dailyMoversAllocation = (parseFloat(config.dailyMoversAllocation) / total) * 100;
+      this.arbitrageAllocation = (parseFloat(config.arbitrageAllocation) / total) * 100;
     }
     
     // Load private key if provided
@@ -256,59 +256,59 @@ class RoninTradingBot {
     this.loadDemoFunds();
     
     // Initialize token-specific parameters
-    this.#initializeTokenParameters();
+    this.initializeTokenParameters();
     
     // Initialize DEX connectors
     this.initializeDexConnectors();
     
     // Set up Discord command handlers
-    this.#setupDiscordCommands();
+    this.setupDiscordCommands();
     
     // Configure Discord webhooks from config
     if (config.discordWebhook) {
       this.addDiscordWebhook(config.discordWebhook);
     }
     
-    this.log(`Ronin Trading Bot initialized. Mode: ${this.#simulationMode ? 'SIMULATION' : 'LIVE TRADING'}`);
-    this.log(`Risk parameters: ${this.#maxRiskPercentage}% max risk, ${this.#drawdownProtection}% drawdown protection`);
+    this.log(`Ronin Trading Bot initialized. Mode: ${this.simulationMode ? 'SIMULATION' : 'LIVE TRADING'}`);
+    this.log(`Risk parameters: ${this.maxRiskPercentage}% max risk, ${this.drawdownProtection}% drawdown protection`);
   }
   
   /**
    * Initialize token-specific parameters
    * @private
    */
-  #initializeTokenParameters() {
+  initializeTokenParameters() {
     // Default volatility settings (higher = more volatile)
-    this.#tokenVolatility = {
-      [this.#tokenRegistry.SOL]: 0.7,
-      [this.#tokenRegistry.BONK]: 1.5,
-      [this.#tokenRegistry.MSOL]: 0.6,
-      [this.#tokenRegistry.SAMO]: 1.2,
-      [this.#tokenRegistry.USDC]: 0.05,
-      [this.#tokenRegistry.USDT]: 0.05,
-      [this.#tokenRegistry.JUP]: 0.9,
+    this.tokenVolatility = {
+      [this.tokenRegistry.SOL]: 0.7,
+      [this.tokenRegistry.BONK]: 1.5,
+      [this.tokenRegistry.MSOL]: 0.6,
+      [this.tokenRegistry.SAMO]: 1.2,
+      [this.tokenRegistry.USDC]: 0.05,
+      [this.tokenRegistry.USDT]: 0.05,
+      [this.tokenRegistry.JUP]: 0.9,
     };
 
     // Token-specific slippage settings (% values)
-    this.#tokenSlippage = {
-      [this.#tokenRegistry.SOL]: 0.7,
-      [this.#tokenRegistry.BONK]: 2.0,
-      [this.#tokenRegistry.MSOL]: 0.6,
-      [this.#tokenRegistry.SAMO]: 1.5,
-      [this.#tokenRegistry.USDC]: 0.1,
-      [this.#tokenRegistry.USDT]: 0.1,
-      [this.#tokenRegistry.JUP]: 1.0,
+    this.tokenSlippage = {
+      [this.tokenRegistry.SOL]: 0.7,
+      [this.tokenRegistry.BONK]: 2.0,
+      [this.tokenRegistry.MSOL]: 0.6,
+      [this.tokenRegistry.SAMO]: 1.5,
+      [this.tokenRegistry.USDC]: 0.1,
+      [this.tokenRegistry.USDT]: 0.1,
+      [this.tokenRegistry.JUP]: 1.0,
     };
 
     // Minimum viable amounts (to avoid dust)
-    this.#minimumViableAmounts = {
-      [this.#tokenRegistry.SOL]: 0.001,
-      [this.#tokenRegistry.BONK]: 50000,
-      [this.#tokenRegistry.MSOL]: 0.001,
-      [this.#tokenRegistry.SAMO]: 1,
-      [this.#tokenRegistry.USDC]: 0.1,
-      [this.#tokenRegistry.USDT]: 0.1,
-      [this.#tokenRegistry.JUP]: 0.2,
+    this.minimumViableAmounts = {
+      [this.tokenRegistry.SOL]: 0.001,
+      [this.tokenRegistry.BONK]: 50000,
+      [this.tokenRegistry.MSOL]: 0.001,
+      [this.tokenRegistry.SAMO]: 1,
+      [this.tokenRegistry.USDC]: 0.1,
+      [this.tokenRegistry.USDT]: 0.1,
+      [this.tokenRegistry.JUP]: 0.2,
     };
   }
   
@@ -316,12 +316,12 @@ class RoninTradingBot {
    * Create necessary directories for the bot
    * @private 
    */
-  #setupDirectories() {
+  setupDirectories() {
     try {
       [
-        this.#dataDir,
-        this.#logsDir,
-        this.#transactionsDir
+        this.dataDir,
+        this.logsDir,
+        this.transactionsDir
       ].forEach(dir => {
         if (!fs.existsSync(dir)) {
           fs.mkdirSync(dir, { recursive: true });
@@ -337,33 +337,33 @@ class RoninTradingBot {
    * Initialize Discord command handlers
    * @private
    */
-  #setupDiscordCommands() {
+  setupDiscordCommands() {
     // Set up command handlers - core commands
-    this.#commandHandlers.set('start', async (args) => {
+    this.commandHandlers.set('start', async (args) => {
       const success = await this.start();
       return `Bot ${success ? 'started successfully' : 'failed to start'}`;
     });
     
-    this.#commandHandlers.set('stop', async () => {
+    this.commandHandlers.set('stop', async () => {
       const success = this.stop();
       return `Bot ${success ? 'stopped successfully' : 'was not running'}`;
     });
     
-    this.#commandHandlers.set('status', async () => {
+    this.commandHandlers.set('status', async () => {
       const status = this.getStatus();
       const balance = await this.calculatePortfolioValue();
       return `**Ronin Bot Status**\n• Mode: ${status.simulationMode ? 'Simulation' : (status.demoMode ? 'Demo' : 'Live Trading')}\n• Running: ${status.isRunning ? 'Yes' : 'No'}\n• Balance: $${balance.toFixed(2)}\n• Trades: ${status.totalTrades} (${status.successfulTrades} successful)\n• P&L: ${status.profitLoss >= 0 ? '+' : ''}$${status.profitLoss.toFixed(2)}`;
     });
     
-    this.#commandHandlers.set('balance', async () => {
-      const balance = this.#demoMode ? 
+    this.commandHandlers.set('balance', async () => {
+      const balance = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
       return `Current portfolio value: $${balance.toFixed(2)}`;
     });
     
     // Demo mode commands
-    this.#commandHandlers.set('demo', async (args) => {
+    this.commandHandlers.set('demo', async (args) => {
       if (args && args[0] === 'on') {
         this.enableDemoMode(true);
         return 'Demo mode enabled';
@@ -374,23 +374,23 @@ class RoninTradingBot {
         this.resetDemoFunds();
         return 'Demo funds reset to default values';
       }
-      return `Demo mode is currently ${this.#demoMode ? 'enabled' : 'disabled'}`;
+      return `Demo mode is currently ${this.demoMode ? 'enabled' : 'disabled'}`;
     });
     
     // Simulation mode commands
-    this.#commandHandlers.set('sim', async (args) => {
+    this.commandHandlers.set('sim', async (args) => {
       if (args && args[0] === 'on') {
-        this.#simulationMode = true;
+        this.simulationMode = true;
         return 'Simulation mode enabled';
       } else if (args && args[0] === 'off') {
-        this.#simulationMode = false;
+        this.simulationMode = false;
         return 'Simulation mode disabled';
       }
-      return `Simulation mode is currently ${this.#simulationMode ? 'enabled' : 'disabled'}`;
+      return `Simulation mode is currently ${this.simulationMode ? 'enabled' : 'disabled'}`;
     });
     
     // Risk management commands
-    this.#commandHandlers.set('risk', async (args) => {
+    this.commandHandlers.set('risk', async (args) => {
       if (args && args.length >= 2) {
         const param = args[0].toLowerCase();
         const value = parseFloat(args[1]);
@@ -399,30 +399,30 @@ class RoninTradingBot {
         
         switch (param) {
           case 'max':
-            this.#maxRiskPercentage = value;
+            this.maxRiskPercentage = value;
             return `Maximum risk percentage set to ${value}%`;
           case 'profit':
-            this.#minProfitThreshold = value;
+            this.minProfitThreshold = value;
             return `Minimum profit threshold set to ${value}%`;
           case 'stoploss':
-            this.#stopLossPercentage = value;
+            this.stopLossPercentage = value;
             return `Stop loss percentage set to ${value}%`;
           case 'dailyloss':
-            this.#dailyLossLimit = value;
+            this.dailyLossLimit = value;
             return `Daily loss limit set to ${value}%`;
           case 'impact':
-            this.#maxPriceImpact = value;
+            this.maxPriceImpact = value;
             return `Maximum price impact set to ${value}%`;
           default:
             return 'Unknown risk parameter. Available: max, profit, stoploss, dailyloss, impact';
         }
       }
       
-      return `Risk parameters:\n• Max risk: ${this.#maxRiskPercentage}%\n• Min profit: ${this.#minProfitThreshold}%\n• Stop loss: ${this.#stopLossPercentage}%\n• Daily loss limit: ${this.#dailyLossLimit}%\n• Max price impact: ${this.#maxPriceImpact}%`;
+      return `Risk parameters:\n• Max risk: ${this.maxRiskPercentage}%\n• Min profit: ${this.minProfitThreshold}%\n• Stop loss: ${this.stopLossPercentage}%\n• Daily loss limit: ${this.dailyLossLimit}%\n• Max price impact: ${this.maxPriceImpact}%`;
     });
     
     // Strategy commands
-    this.#commandHandlers.set('strategies', async (args) => {
+    this.commandHandlers.set('strategies', async (args) => {
       if (args && args.length >= 3 && args[0].toLowerCase() === 'allocation') {
         const daily = parseFloat(args[1]);
         const arb = parseFloat(args[2]);
@@ -432,17 +432,17 @@ class RoninTradingBot {
         const total = daily + arb;
         if (total <= 0) return 'Allocation total must be greater than 0';
         
-        this.#dailyMoversAllocation = (daily / total) * 100;
-        this.#arbitrageAllocation = (arb / total) * 100;
+        this.dailyMoversAllocation = (daily / total) * 100;
+        this.arbitrageAllocation = (arb / total) * 100;
         
-        return `Strategy allocation set to ${this.#dailyMoversAllocation.toFixed(1)}% daily movers, ${this.#arbitrageAllocation.toFixed(1)}% arbitrage`;
+        return `Strategy allocation set to ${this.dailyMoversAllocation.toFixed(1)}% daily movers, ${this.arbitrageAllocation.toFixed(1)}% arbitrage`;
       }
       
-      return `Strategy allocation:\n• Daily movers: ${this.#dailyMoversAllocation.toFixed(1)}%\n• Arbitrage: ${this.#arbitrageAllocation.toFixed(1)}%`;
+      return `Strategy allocation:\n• Daily movers: ${this.dailyMoversAllocation.toFixed(1)}%\n• Arbitrage: ${this.arbitrageAllocation.toFixed(1)}%`;
     });
     
     // Trade commands
-    this.#commandHandlers.set('trade', async (args) => {
+    this.commandHandlers.set('trade', async (args) => {
       if (args && args.length >= 3) {
         const fromSymbol = args[0].toUpperCase();
         const toSymbol = args[1].toUpperCase();
@@ -450,8 +450,8 @@ class RoninTradingBot {
         
         if (isNaN(amount)) return 'Invalid amount format';
         
-        const fromMint = this.#tokenRegistry[fromSymbol] || fromSymbol;
-        const toMint = this.#tokenRegistry[toSymbol] || toSymbol;
+        const fromMint = this.tokenRegistry[fromSymbol] || fromSymbol;
+        const toMint = this.tokenRegistry[toSymbol] || toSymbol;
         
         if (!fromMint || !toMint) return 'Unknown token symbol';
         
@@ -465,7 +465,7 @@ class RoninTradingBot {
     });
     
     // Scan commands
-    this.#commandHandlers.set('scan', async (args) => {
+    this.commandHandlers.set('scan', async (args) => {
       const scanResults = await this.scanChainForOpportunities();
       if (!scanResults) return 'Chain scan failed';
       
@@ -500,7 +500,7 @@ class RoninTradingBot {
     });
     
     // History commands
-    this.#commandHandlers.set('history', async (args) => {
+    this.commandHandlers.set('history', async (args) => {
       const limit = args && args[0] ? parseInt(args[0]) : 5;
       const history = this.getTradeHistory(limit);
       
@@ -528,7 +528,7 @@ class RoninTradingBot {
     });
     
     // Help command
-    this.#commandHandlers.set('help', async () => {
+    this.commandHandlers.set('help', async () => {
       return '**Ronin Bot Commands**\n' +
              '• `!start` - Start the bot\n' +
              '• `!stop` - Stop the bot\n' +
@@ -545,7 +545,7 @@ class RoninTradingBot {
     });
     
     // Report command
-    this.#commandHandlers.set('report', async () => {
+    this.commandHandlers.set('report', async () => {
       return await this.generatePerformanceReport();
     });
   }
@@ -557,7 +557,7 @@ class RoninTradingBot {
    * @returns {Promise<string>} Command response
    */
   async processDiscordCommand(command, args) {
-    const handler = this.#commandHandlers.get(command.toLowerCase());
+    const handler = this.commandHandlers.get(command.toLowerCase());
     if (handler) {
       try {
         return await handler(args);
@@ -572,16 +572,16 @@ class RoninTradingBot {
    * Initialize connection pool with health checks
    * @private
    */
-  async #initializeConnectionPool() {
+  async initializeConnectionPool() {
     this.log('Initializing RPC connection pool...');
     
     // Check health of all endpoints
     const healthResults = await Promise.all(
-      this.#rpcEndpoints.map(async (endpoint, index) => {
+      this.rpcEndpoints.map(async (endpoint, index) => {
         try {
           const connection = new Connection(endpoint, {
             commitment: 'confirmed',
-            confirmTransactionInitialTimeout: this.#transactionTimeoutMs,
+            confirmTransactionInitialTimeout: this.transactionTimeoutMs,
             disableRetryOnRateLimit: false,
           });
           
@@ -589,7 +589,7 @@ class RoninTradingBot {
           await Promise.race([
             connection.getVersion(),
             new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Timeout')), this.#rpcHealthTimeout)
+              setTimeout(() => reject(new Error('Timeout')), this.rpcHealthTimeout)
             )
           ]);
           const responseTime = Date.now() - startTime;
@@ -623,15 +623,15 @@ class RoninTradingBot {
     }
     
     // Create connection pool with all healthy endpoints
-    this.#connectionPool = healthyEndpoints.map(result => result.connection);
+    this.connectionPool = healthyEndpoints.map(result => result.connection);
     
     // Use the fastest endpoint as default
-    this.#connection = this.#connectionPool[0];
-    this.#currentRpcIndex = healthyEndpoints[0].index;
+    this.connection = this.connectionPool[0];
+    this.currentRpcIndex = healthyEndpoints[0].index;
     
-    this.log(`Selected ${this.#rpcEndpoints[this.#currentRpcIndex]} as primary endpoint (${healthyEndpoints[0].responseTime}ms response time)`);
+    this.log(`Selected ${this.rpcEndpoints[this.currentRpcIndex]} as primary endpoint (${healthyEndpoints[0].responseTime}ms response time)`);
     
-    return this.#connection;
+    return this.connection;
   }
   
   /**
@@ -640,21 +640,21 @@ class RoninTradingBot {
    * @private 
    */
   async switchRpcEndpoint() {
-    if (this.#rpcEndpoints.length <= 1) {
+    if (this.rpcEndpoints.length <= 1) {
       this.log('No alternative RPC endpoints available', 'warn');
       return false;
     }
 
-    const startIndex = this.#currentRpcIndex;
-    const maxAttempts = this.#rpcEndpoints.length;
+    const startIndex = this.currentRpcIndex;
+    const maxAttempts = this.rpcEndpoints.length;
     let attempts = 0;
     
     while (attempts < maxAttempts) {
       // Move to next endpoint using round-robin
-      this.#currentRpcIndex = (this.#currentRpcIndex + 1) % this.#rpcEndpoints.length;
+      this.currentRpcIndex = (this.currentRpcIndex + 1) % this.rpcEndpoints.length;
       attempts++;
       
-      const newEndpoint = this.#rpcEndpoints[this.#currentRpcIndex];
+      const newEndpoint = this.rpcEndpoints[this.currentRpcIndex];
       
       try {
         this.log(`Switching to RPC endpoint: ${newEndpoint}`, 'debug');
@@ -662,7 +662,7 @@ class RoninTradingBot {
         // Create new connection
         const newConnection = new Connection(newEndpoint, {
           commitment: 'confirmed',
-          confirmTransactionInitialTimeout: this.#transactionTimeoutMs,
+          confirmTransactionInitialTimeout: this.transactionTimeoutMs,
           disableRetryOnRateLimit: false,
         });
         
@@ -675,16 +675,16 @@ class RoninTradingBot {
         const responseTime = Date.now() - startTime;
         
         // Connection works, update the current connection
-        this.#connection = newConnection;
+        this.connection = newConnection;
         this.log(`Switched to ${newEndpoint} (${responseTime}ms response time)`, 'info');
         
         // Update the connection pool
-        if (this.#connectionPool[this.#currentRpcIndex]) {
-          this.#connectionPool[this.#currentRpcIndex] = newConnection;
+        if (this.connectionPool[this.currentRpcIndex]) {
+          this.connectionPool[this.currentRpcIndex] = newConnection;
         }
         
         // Clear cached fee estimates after changing endpoint
-        this.#cachedFeeEstimate = null;
+        this.cachedFeeEstimate = null;
         
         return true;
       } catch (e) {
@@ -694,7 +694,7 @@ class RoninTradingBot {
     }
     
     // If we've tried all endpoints and none worked, reset to the original
-    this.#currentRpcIndex = startIndex;
+    this.currentRpcIndex = startIndex;
     this.log('Tried all RPC endpoints, none working properly', 'error');
     return false;
   }
@@ -732,12 +732,12 @@ class RoninTradingBot {
         }
       }
 
-      this.#wallet = Keypair.fromSecretKey(
+      this.wallet = Keypair.fromSecretKey(
         Array.isArray(privateKeyData) ? Uint8Array.from(privateKeyData) : privateKeyData
       );
       
-      this.#walletAddress = this.#wallet.publicKey.toString();
-      this.log(`Wallet loaded: ${this.#walletAddress}`);
+      this.walletAddress = this.wallet.publicKey.toString();
+      this.log(`Wallet loaded: ${this.walletAddress}`);
     } catch (error) {
       this.log(`Error loading wallet: ${error.message}`, 'error');
     }
@@ -750,7 +750,7 @@ class RoninTradingBot {
     this.log('Initializing DEX connectors');
     
     // Jupiter connector (already using this)
-    this.#dexConnectors.set('jupiter', {
+    this.dexConnectors.set('jupiter', {
       name: 'Jupiter',
       getPrice: async (mint) => {
         return await this.getTokenPrice(mint);
@@ -764,7 +764,7 @@ class RoninTradingBot {
     });
     
     // Raydium connector
-    this.#dexConnectors.set('raydium', {
+    this.dexConnectors.set('raydium', {
       name: 'Raydium',
       getPrice: async (mint) => {
         try {
@@ -792,7 +792,7 @@ class RoninTradingBot {
     });
     
     // Orca connector
-    this.#dexConnectors.set('orca', {
+    this.dexConnectors.set('orca', {
       name: 'Orca',
       getPrice: async (mint) => {
         try {
@@ -806,7 +806,7 @@ class RoninTradingBot {
       }
     });
     
-    this.notify(`Initialized connectors for ${this.#dexConnectors.size} DEXs`);
+    this.notify(`Initialized connectors for ${this.dexConnectors.size} DEXs`);
   }
   
   /**
@@ -815,7 +815,7 @@ class RoninTradingBot {
    */
   addNotificationHandler(handler) {
     if (typeof handler === 'function') {
-      this.#notificationHandlers.push(handler);
+      this.notificationHandlers.push(handler);
     }
   }
   
@@ -826,7 +826,7 @@ class RoninTradingBot {
   addDiscordWebhook(webhookUrl) {
     if (!webhookUrl) return;
     
-    this.#discordWebhooks.push(webhookUrl);
+    this.discordWebhooks.push(webhookUrl);
     
     // Add a handler for Discord notifications
     this.addNotificationHandler(async (message, level) => {
@@ -844,7 +844,7 @@ class RoninTradingBot {
    */
   async sendDiscordNotification(message, level = 'info') {
     try {
-      if (this.#discordWebhooks.length === 0) return;
+      if (this.discordWebhooks.length === 0) return;
       
       // Determine color based on level
       let color;
@@ -871,13 +871,13 @@ class RoninTradingBot {
       };
       
       // Add footer with bot info
-      const mode = this.#simulationMode ? 'Simulation' : (this.#demoMode ? 'Demo' : 'Live');
+      const mode = this.simulationMode ? 'Simulation' : (this.demoMode ? 'Demo' : 'Live');
       embed.footer = {
         text: `Ronin Bot (${mode}) | ${new Date().toLocaleString()}`
       };
       
       // Send to all webhooks
-      for (const webhookUrl of this.#discordWebhooks) {
+      for (const webhookUrl of this.discordWebhooks) {
         try {
           const response = await fetch(webhookUrl, {
             method: 'POST',
@@ -972,11 +972,11 @@ class RoninTradingBot {
    */
   async sendStatusMessage() {
     try {
-      const balance = this.#demoMode ? 
+      const balance = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
       
-      const walletAddress = this.#walletAddress;
+      const walletAddress = this.walletAddress;
       if (!walletAddress) {
         this.notify('No wallet connected, cannot send status message', 'warn');
         return;
@@ -985,12 +985,12 @@ class RoninTradingBot {
       const explorerUrl = `https://solscan.io/account/${walletAddress}`;
       
       const message = `🤖 **RONIN BOT STATUS**\n\n` +
-                      `+ **Mode:** ${this.#simulationMode ? 'Simulation' : (this.#demoMode ? 'Demo' : 'Live Trading')}\n` +
+                      `+ **Mode:** ${this.simulationMode ? 'Simulation' : (this.demoMode ? 'Demo' : 'Live Trading')}\n` +
                       `+ **Balance:** $${balance.toFixed(2)}\n` +
                       `+ **Wallet:** [${walletAddress.slice(0, 6)}...${walletAddress.slice(-6)}](${explorerUrl})\n` +
-                      `+ **Total Trades:** ${this.#successfulTrades + this.#failedTrades}\n` +
-                      `+ **Success Rate:** ${(this.#successfulTrades + this.#failedTrades) > 0 ? (this.#successfulTrades / (this.#successfulTrades + this.#failedTrades) * 100).toFixed(1) : 0}%\n` +
-                      `+ **P&L:** ${this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss >= 0 ? '+' : ''}$${(this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss).toFixed(2)}\n`;
+                      `+ **Total Trades:** ${this.successfulTrades + this.failedTrades}\n` +
+                      `+ **Success Rate:** ${(this.successfulTrades + this.failedTrades) > 0 ? (this.successfulTrades / (this.successfulTrades + this.failedTrades) * 100).toFixed(1) : 0}%\n` +
+                      `+ **P&L:** ${this.demoMode ? this.demoProfitLoss : this.totalProfitLoss >= 0 ? '+' : ''}$${(this.demoMode ? this.demoProfitLoss : this.totalProfitLoss).toFixed(2)}\n`;
       
       await this.sendDiscordNotification(message, 'info');
     } catch (error) {
@@ -1005,19 +1005,19 @@ class RoninTradingBot {
   async generatePerformanceReport() {
     try {
       // Calculate current portfolio value
-      const currentValue = this.#demoMode ? 
+      const currentValue = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
       
       // Get initial investment
-      const startingValue = this.#initialInvestment || currentValue;
+      const startingValue = this.initialInvestment || currentValue;
       
       // Calculate overall performance
-      const totalProfitLoss = this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss;
+      const totalProfitLoss = this.demoMode ? this.demoProfitLoss : this.totalProfitLoss;
       const totalProfitPercent = startingValue > 0 ? (totalProfitLoss / startingValue) * 100 : 0;
       
       // Calculate daily performance
-      const dailyProfitPercent = this.#dailyStartBalance > 0 ? (this.#dailyPnL / this.#dailyStartBalance) * 100 : 0;
+      const dailyProfitPercent = this.dailyStartBalance > 0 ? (this.dailyPnL / this.dailyStartBalance) * 100 : 0;
       
       // Get recent trades
       const recentTrades = this.getTradeHistory(5);
@@ -1027,17 +1027,17 @@ class RoninTradingBot {
       
       // Summary section
       report += `**Summary**\n`;
-      report += `+ Mode: ${this.#simulationMode ? 'Simulation' : (this.#demoMode ? 'Demo' : 'Live Trading')}\n`;
+      report += `+ Mode: ${this.simulationMode ? 'Simulation' : (this.demoMode ? 'Demo' : 'Live Trading')}\n`;
       report += `+ Current Portfolio: $${currentValue.toFixed(2)}\n`;
       report += `+ Total P&L: ${totalProfitLoss >= 0 ? '+' : ''}$${totalProfitLoss.toFixed(2)} (${totalProfitPercent >= 0 ? '+' : ''}${totalProfitPercent.toFixed(2)}%)\n`;
-      report += `+ Daily P&L: ${this.#dailyPnL >= 0 ? '+' : ''}$${this.#dailyPnL.toFixed(2)} (${dailyProfitPercent >= 0 ? '+' : ''}${dailyProfitPercent.toFixed(2)}%)\n\n`;
+      report += `+ Daily P&L: ${this.dailyPnL >= 0 ? '+' : ''}$${this.dailyPnL.toFixed(2)} (${dailyProfitPercent >= 0 ? '+' : ''}${dailyProfitPercent.toFixed(2)}%)\n\n`;
       
       // Statistics section
       report += `**Trading Statistics**\n`;
-      report += `+ Total Trades: ${this.#successfulTrades + this.#failedTrades}\n`;
-      report += `+ Successful: ${this.#successfulTrades}\n`;
-      report += `+ Failed: ${this.#failedTrades}\n`;
-      report += `+ Success Rate: ${(this.#successfulTrades + this.#failedTrades) > 0 ? (this.#successfulTrades / (this.#successfulTrades + this.#failedTrades) * 100).toFixed(1) : 0}%\n\n`;
+      report += `+ Total Trades: ${this.successfulTrades + this.failedTrades}\n`;
+      report += `+ Successful: ${this.successfulTrades}\n`;
+      report += `+ Failed: ${this.failedTrades}\n`;
+      report += `+ Success Rate: ${(this.successfulTrades + this.failedTrades) > 0 ? (this.successfulTrades / (this.successfulTrades + this.failedTrades) * 100).toFixed(1) : 0}%\n\n`;
       
       // Recent trades section
       if (recentTrades.length > 0) {
@@ -1079,9 +1079,9 @@ class RoninTradingBot {
     console.log(formattedMessage);
     
     // Queue log write to avoid blocking
-    this.#queueFileOperation(async () => {
+    this.queueFileOperation(async () => {
       try {
-        const logFile = path.join(this.#logsDir, `bot-${new Date().toISOString().split('T')[0]}.log`);
+        const logFile = path.join(this.logsDir, `bot-${new Date().toISOString().split('T')[0]}.log`);
         await appendFileAsync(logFile, formattedMessage + '\n');
       } catch (e) {
         console.error('Failed to write to log file:', e);
@@ -1096,8 +1096,8 @@ class RoninTradingBot {
    */
   notify(message, level = 'info') {
     this.log(message, level);
-    if (this.#notificationHandlers.length > 0) {
-      this.#notificationHandlers.forEach(handler => {
+    if (this.notificationHandlers.length > 0) {
+      this.notificationHandlers.forEach(handler => {
         try {
           if (typeof handler === 'function') {
             handler(message, level);
@@ -1114,12 +1114,12 @@ class RoninTradingBot {
    * @param {Function} operation Async operation to queue
    * @private
    */
-  #queueFileOperation(operation) {
-    this.#writeQueue.push(operation);
+  queueFileOperation(operation) {
+    this.writeQueue.push(operation);
     
     // Start processing the queue if not already processing
-    if (!this.#isProcessingQueue) {
-      this.#processWriteQueue();
+    if (!this.isProcessingQueue) {
+      this.processWriteQueue();
     }
   }
   
@@ -1127,22 +1127,22 @@ class RoninTradingBot {
    * Process the file operation queue
    * @private
    */
-  async #processWriteQueue() {
-    if (this.#isProcessingQueue || this.#writeQueue.length === 0) {
+  async processWriteQueue() {
+    if (this.isProcessingQueue || this.writeQueue.length === 0) {
       return;
     }
     
-    this.#isProcessingQueue = true;
+    this.isProcessingQueue = true;
     
     try {
-      while (this.#writeQueue.length > 0) {
-        const operation = this.#writeQueue.shift();
+      while (this.writeQueue.length > 0) {
+        const operation = this.writeQueue.shift();
         await operation();
       }
     } catch (error) {
       console.error('Error processing write queue:', error.message);
     } finally {
-      this.#isProcessingQueue = false;
+      this.isProcessingQueue = false;
     }
   }
   
@@ -1152,9 +1152,9 @@ class RoninTradingBot {
    * @returns {string|null} Stored value or null
    * @private 
    */
-  #getStoredValue(key) {
+  getStoredValue(key) {
     try {
-      const storageFile = path.join(this.#dataDir, 'storage.json');
+      const storageFile = path.join(this.dataDir, 'storage.json');
       if (!fs.existsSync(storageFile)) {
         return null;
       }
@@ -1172,10 +1172,10 @@ class RoninTradingBot {
    * @param {string} value Value to store
    * @private 
    */
-  #setStoredValue(key, value) {
-    this.#queueFileOperation(async () => {
+  setStoredValue(key, value) {
+    this.queueFileOperation(async () => {
       try {
-        const storageFile = path.join(this.#dataDir, 'storage.json');
+        const storageFile = path.join(this.dataDir, 'storage.json');
         let data = {};
         
         if (fs.existsSync(storageFile)) {
@@ -1205,10 +1205,10 @@ class RoninTradingBot {
    * @param {Object} details Transaction details
    * @private
    */
-  #storeTransactionDetails(signature, details) {
-    this.#queueFileOperation(async () => {
+  storeTransactionDetails(signature, details) {
+    this.queueFileOperation(async () => {
       try {
-        const filePath = path.join(this.#transactionsDir, `${signature}.json`);
+        const filePath = path.join(this.transactionsDir, `${signature}.json`);
         const tempFilePath = `${filePath}.tmp`;
         await writeFileAsync(tempFilePath, JSON.stringify(details, null, 2));
         await renameAsync(tempFilePath, filePath);
@@ -1222,37 +1222,37 @@ class RoninTradingBot {
    * Start the trading bot
    */
   async start() {
-    if (this.#isRunning) {
+    if (this.isRunning) {
       this.log('Bot is already running', 'warn');
       return false;
     }
     
     try {
-      this.#isRunning = true;
+      this.isRunning = true;
       this.notify('Starting Ronin trading bot...');
       
       // Check if wallet is connected
-      if (!this.#wallet && !this.#demoMode) {
+      if (!this.wallet && !this.demoMode) {
         this.notify('No wallet connected. Please connect a wallet or enable demo mode.', 'warn');
-        this.#isRunning = false;
+        this.isRunning = false;
         return false;
       }
       
       // Perform diagnostics to ensure everything is working
       if (!await this.runDiagnostics()) {
-        this.#isRunning = false;
+        this.isRunning = false;
         return false;
       }
       
       // Get initial balance for drawdown protection
-      this.#initialInvestment = this.#demoMode ? 
+      this.initialInvestment = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
       
       // Track daily balance
       await this.trackDailyBalance();
       
-      this.notify(`Initial portfolio value: $${this.#initialInvestment.toFixed(2)}`);
+      this.notify(`Initial portfolio value: $${this.initialInvestment.toFixed(2)}`);
       
       // Send initial status message to Discord
       await this.sendStatusMessage();
@@ -1265,7 +1265,7 @@ class RoninTradingBot {
       
       return true;
     } catch (error) {
-      this.#isRunning = false;
+      this.isRunning = false;
       this.notify(`Error starting bot: ${error.message}`, 'error');
       return false;
     }
@@ -1275,25 +1275,25 @@ class RoninTradingBot {
    * Stop the trading bot
    */
   stop() {
-    if (!this.#isRunning) {
+    if (!this.isRunning) {
       this.log('Bot is not running', 'warn');
       return false;
     }
     
-    this.#isRunning = false;
+    this.isRunning = false;
     this.notify('Stopping bot...');
     
     // Save final stats
     const saveStats = async () => {
       try {
-        const currentValue = this.#demoMode ? 
+        const currentValue = this.demoMode ? 
           await this.calculateDemoPortfolioValue() : 
           await this.calculatePortfolioValue();
         
-        this.#setStoredValue('lastKnownBalance', currentValue.toString());
+        this.setStoredValue('lastKnownBalance', currentValue.toString());
         
         // Calculate uptime
-        const startTimeStr = this.#getStoredValue('startTime');
+        const startTimeStr = this.getStoredValue('startTime');
         const startTime = startTimeStr ? parseInt(startTimeStr) : Date.now();
         const uptime = (Date.now() - startTime) / 1000;
         const hours = Math.floor(uptime / 3600);
@@ -1304,8 +1304,8 @@ class RoninTradingBot {
           `🛑 **BOT STOPPED**\n` +
           `+ Final Balance: $${currentValue.toFixed(2)}\n` +
           `+ Uptime: ${hours}h ${minutes}m\n` +
-          `+ Trades: ${this.#successfulTrades + this.#failedTrades} (${this.#successfulTrades} successful)\n` +
-          `+ P&L: ${this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss >= 0 ? '+' : ''}$${(this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss).toFixed(2)}`,
+          `+ Trades: ${this.successfulTrades + this.failedTrades} (${this.successfulTrades} successful)\n` +
+          `+ P&L: ${this.demoMode ? this.demoProfitLoss : this.totalProfitLoss >= 0 ? '+' : ''}$${(this.demoMode ? this.demoProfitLoss : this.totalProfitLoss).toFixed(2)}`,
           'info'
         );
       } catch (error) {
@@ -1326,13 +1326,13 @@ class RoninTradingBot {
     
     // Test RPC connection
     try {
-      const version = await this.#connection.getVersion();
+      const version = await this.connection.getVersion();
       this.notify(`RPC connection successful. Solana version: ${version['solana-core']}`);
     } catch (error) {
       this.notify(`RPC connection failed: ${error.message}`, 'error');
       
       // Try switching endpoints if available
-      if (this.#rpcEndpoints.length > 1) {
+      if (this.rpcEndpoints.length > 1) {
         this.notify('Trying alternative RPC endpoint...', 'warn');
         const switched = await this.switchRpcEndpoint();
         if (!switched) {
@@ -1345,16 +1345,16 @@ class RoninTradingBot {
     }
     
     // Check wallet if not in demo mode
-    if (!this.#demoMode) {
+    if (!this.demoMode) {
       try {
-        const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
+        const solBalance = await this.getTokenBalance(this.tokenRegistry.SOL);
         this.notify(`SOL balance: ${solBalance}`);
         if (solBalance < 0.01) {
           this.notify('WARNING: Low SOL balance may cause transaction failures', 'warn');
         }
       } catch (error) {
         this.notify(`Balance check failed: ${error.message}`, 'error');
-        if (!this.#demoMode) {
+        if (!this.demoMode) {
           throw new Error(`Balance check failed: ${error.message}`);
         }
       }
@@ -1362,8 +1362,8 @@ class RoninTradingBot {
     
     // Test Jupiter API
     try {
-      const fromMint = this.#tokenRegistry.SOL;
-      const toMint = this.#tokenRegistry.USDC;
+      const fromMint = this.tokenRegistry.SOL;
+      const toMint = this.tokenRegistry.USDC;
       // Just get a quote, don't execute
       const quote = await this.getJupiterQuote(fromMint, toMint, 0.001, 100);
       if (quote) {
@@ -1377,7 +1377,7 @@ class RoninTradingBot {
     }
     
     // Set start time for uptime tracking
-    this.#setStoredValue('startTime', Date.now().toString());
+    this.setStoredValue('startTime', Date.now().toString());
     
     this.notify('Diagnostics completed successfully');
     return true;
@@ -1388,7 +1388,7 @@ class RoninTradingBot {
    */
   setupDailyReport() {
     // Parse report time (format: HH:MM)
-    const [hours, minutes] = this.#dailyReportTime.split(':').map(Number);
+    const [hours, minutes] = this.dailyReportTime.split(':').map(Number);
     
     // Function to calculate time until next report
     const getTimeUntilNextReport = () => {
@@ -1415,8 +1415,8 @@ class RoninTradingBot {
       
       this.log(`Next daily report scheduled in ${(timeUntilNext / (1000 * 60 * 60)).toFixed(1)} hours`, 'debug');
       
-      this.#dailyReportSchedule = setTimeout(async () => {
-        if (this.#isRunning) {
+      this.dailyReportSchedule = setTimeout(async () => {
+        if (this.isRunning) {
           this.log('Generating daily report', 'info');
           
           try {
@@ -1425,31 +1425,31 @@ class RoninTradingBot {
             await this.sendDiscordNotification(report, 'info');
             
             // Save daily balance record
-            const balance = this.#demoMode ? 
+            const balance = this.demoMode ? 
               await this.calculateDemoPortfolioValue() : 
               await this.calculatePortfolioValue();
             
-            const change = this.#dailyStartBalance > 0 
-              ? ((balance - this.#dailyStartBalance) / this.#dailyStartBalance) * 100 
+            const change = this.dailyStartBalance > 0 
+              ? ((balance - this.dailyStartBalance) / this.dailyStartBalance) * 100 
               : 0;
             
-            this.#dailyBalances.push({
+            this.dailyBalances.push({
               date: new Date().toDateString(),
               balance,
               change
             });
             
-            if (this.#dailyBalances.length > 30) {
-              this.#dailyBalances = this.#dailyBalances.slice(-30);
+            if (this.dailyBalances.length > 30) {
+              this.dailyBalances = this.dailyBalances.slice(-30);
             }
             
-            this.#setStoredValue('dailyBalances', JSON.stringify(this.#dailyBalances));
+            this.setStoredValue('dailyBalances', JSON.stringify(this.dailyBalances));
             
             // Reset daily stats
-            this.#dailyStartBalance = balance;
-            this.#dailyPnL = 0;
-            this.#setStoredValue('lastBalanceDay', new Date().toDateString());
-            this.#setStoredValue('dailyStartBalance', this.#dailyStartBalance.toString());
+            this.dailyStartBalance = balance;
+            this.dailyPnL = 0;
+            this.setStoredValue('lastBalanceDay', new Date().toDateString());
+            this.setStoredValue('dailyStartBalance', this.dailyStartBalance.toString());
             
             this.log('Daily report complete and stats reset', 'info');
           } catch (error) {
@@ -1473,20 +1473,20 @@ class RoninTradingBot {
   async trackDailyBalance() {
     try {
       // Calculate current portfolio value
-      const totalBalance = this.#demoMode ? 
+      const totalBalance = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
 
       // Set as daily starting balance if not set yet today
       const today = new Date().toDateString();
-      const lastBalanceDay = this.#getStoredValue('lastBalanceDay');
+      const lastBalanceDay = this.getStoredValue('lastBalanceDay');
       
       if (lastBalanceDay !== today) {
-        this.#dailyStartBalance = totalBalance;
-        this.#dailyPnL = 0;
-        this.#setStoredValue('lastBalanceDay', today);
-        this.#setStoredValue('dailyStartBalance', this.#dailyStartBalance.toString());
-        this.log(`New day detected. Setting starting balance: $${this.#dailyStartBalance.toFixed(2)}`);
+        this.dailyStartBalance = totalBalance;
+        this.dailyPnL = 0;
+        this.setStoredValue('lastBalanceDay', today);
+        this.setStoredValue('dailyStartBalance', this.dailyStartBalance.toString());
+        this.log(`New day detected. Setting starting balance: $${this.dailyStartBalance.toFixed(2)}`);
         
         // Store historical balance
         const balanceRecord = {
@@ -1494,38 +1494,38 @@ class RoninTradingBot {
           balance: totalBalance,
           change: 0
         };
-        this.#dailyBalances.push(balanceRecord);
-        if (this.#dailyBalances.length > 30) {
-          this.#dailyBalances = this.#dailyBalances.slice(-30); // Keep only last 30 days
+        this.dailyBalances.push(balanceRecord);
+        if (this.dailyBalances.length > 30) {
+          this.dailyBalances = this.dailyBalances.slice(-30); // Keep only last 30 days
         }
-        this.#setStoredValue('dailyBalances', JSON.stringify(this.#dailyBalances));
-      } else if (this.#dailyStartBalance === 0) {
+        this.setStoredValue('dailyBalances', JSON.stringify(this.dailyBalances));
+      } else if (this.dailyStartBalance === 0) {
         // If we're restarting the bot during the same day, load saved value
-        const savedBalance = this.#getStoredValue('dailyStartBalance');
+        const savedBalance = this.getStoredValue('dailyStartBalance');
         if (savedBalance) {
-          this.#dailyStartBalance = parseFloat(savedBalance);
+          this.dailyStartBalance = parseFloat(savedBalance);
         } else {
-          this.#dailyStartBalance = totalBalance;
-          this.#setStoredValue('dailyStartBalance', this.#dailyStartBalance.toString());
+          this.dailyStartBalance = totalBalance;
+          this.setStoredValue('dailyStartBalance', this.dailyStartBalance.toString());
         }
-        this.log(`Loaded daily starting balance: $${this.#dailyStartBalance.toFixed(2)}`);
+        this.log(`Loaded daily starting balance: $${this.dailyStartBalance.toFixed(2)}`);
       }
       
       // Calculate current daily P&L
-      this.#dailyPnL = totalBalance - this.#dailyStartBalance;
-      const dailyPnLPercent = (this.#dailyPnL / this.#dailyStartBalance * 100);
-      this.log(`Current daily P&L: $${this.#dailyPnL.toFixed(2)} (${dailyPnLPercent.toFixed(2)}%)`);
+      this.dailyPnL = totalBalance - this.dailyStartBalance;
+      const dailyPnLPercent = (this.dailyPnL / this.dailyStartBalance * 100);
+      this.log(`Current daily P&L: $${this.dailyPnL.toFixed(2)} (${dailyPnLPercent.toFixed(2)}%)`);
       
       // Store last known balance
-      this.#setStoredValue('lastKnownBalance', totalBalance.toString());
+      this.setStoredValue('lastKnownBalance', totalBalance.toString());
       
       // Check daily loss limit
-      if (this.#hasHitDailyLossLimit()) {
-        this.notify(`⚠️ DAILY LOSS LIMIT REACHED: ${dailyPnLPercent.toFixed(2)}% loss exceeds ${this.#dailyLossLimit}% limit`, 'alert');
+      if (this.hasHitDailyLossLimit()) {
+        this.notify(`⚠️ DAILY LOSS LIMIT REACHED: ${dailyPnLPercent.toFixed(2)}% loss exceeds ${this.dailyLossLimit}% limit`, 'alert');
         
         // Send Discord alert for loss limit
         await this.sendDiscordNotification(
-          `🚨 **DAILY LOSS LIMIT REACHED**\nTrading halted - Daily loss: ${dailyPnLPercent.toFixed(2)}% exceeds ${this.#dailyLossLimit}% limit\nCurrent balance: $${totalBalance.toFixed(2)}`,
+          `🚨 **DAILY LOSS LIMIT REACHED**\nTrading halted - Daily loss: ${dailyPnLPercent.toFixed(2)}% exceeds ${this.dailyLossLimit}% limit\nCurrent balance: $${totalBalance.toFixed(2)}`,
           'error'
         );
       }
@@ -1535,7 +1535,7 @@ class RoninTradingBot {
       this.log(`Error tracking daily balance: ${error.message}`, 'error');
       
       // Try to recover from stored data
-      const lastKnownBalanceStr = this.#getStoredValue('lastKnownBalance');
+      const lastKnownBalanceStr = this.getStoredValue('lastKnownBalance');
       let lastKnownBalance = 0;
       
       if (lastKnownBalanceStr) {
@@ -1544,23 +1544,23 @@ class RoninTradingBot {
       }
       
       // If daily start balance is not set, try to load from storage
-      if (this.#dailyStartBalance === 0) {
-        const savedStartBalance = this.#getStoredValue('dailyStartBalance');
+      if (this.dailyStartBalance === 0) {
+        const savedStartBalance = this.getStoredValue('dailyStartBalance');
         if (savedStartBalance) {
-          this.#dailyStartBalance = parseFloat(savedStartBalance);
-          this.log(`Recovered daily starting balance: $${this.#dailyStartBalance}`, 'warn');
+          this.dailyStartBalance = parseFloat(savedStartBalance);
+          this.log(`Recovered daily starting balance: $${this.dailyStartBalance}`, 'warn');
         } else if (lastKnownBalance > 0) {
           // Use last known balance as starting balance if we have nothing else
-          this.#dailyStartBalance = lastKnownBalance;
-          this.log(`Using last known balance as daily starting balance: $${this.#dailyStartBalance}`, 'warn');
+          this.dailyStartBalance = lastKnownBalance;
+          this.log(`Using last known balance as daily starting balance: $${this.dailyStartBalance}`, 'warn');
         } else {
           // Absolute last resort - use a safe default
-          this.#dailyStartBalance = 1000;
-          this.log(`Using safe default for daily starting balance: $${this.#dailyStartBalance}`, 'warn');
+          this.dailyStartBalance = 1000;
+          this.log(`Using safe default for daily starting balance: $${this.dailyStartBalance}`, 'warn');
         }
       }
       
-      return lastKnownBalance > 0 ? lastKnownBalance : this.#dailyStartBalance;
+      return lastKnownBalance > 0 ? lastKnownBalance : this.dailyStartBalance;
     }
   }
   
@@ -1569,25 +1569,25 @@ class RoninTradingBot {
    * @returns {boolean} True if daily loss limit has been reached
    * @private 
    */
-  #hasHitDailyLossLimit() {
-    if (this.#dailyStartBalance <= 0) return false;
-    const lossPercentage = (this.#dailyPnL / this.#dailyStartBalance) * 100;
-    return lossPercentage <= -this.#dailyLossLimit;
+  hasHitDailyLossLimit() {
+    if (this.dailyStartBalance <= 0) return false;
+    const lossPercentage = (this.dailyPnL / this.dailyStartBalance) * 100;
+    return lossPercentage <= -this.dailyLossLimit;
   }
   
   /**
    * Main trading loop
    */
   async runTradingLoop() {
-    while (this.#isRunning) {
+    while (this.isRunning) {
       try {
         // Check for drawdown protection
-        const currentValue = this.#demoMode ? 
+        const currentValue = this.demoMode ? 
           await this.calculateDemoPortfolioValue() : 
           await this.calculatePortfolioValue();
           
-        if (currentValue < this.#initialInvestment * (1 - this.#drawdownProtection / 100)) {
-          this.notify(`EMERGENCY STOP: Drawdown protection triggered. Portfolio value ($${currentValue.toFixed(2)}) is below ${this.#drawdownProtection}% of initial investment ($${this.#initialInvestment.toFixed(2)})`, 'error');
+        if (currentValue < this.initialInvestment * (1 - this.drawdownProtection / 100)) {
+          this.notify(`EMERGENCY STOP: Drawdown protection triggered. Portfolio value ($${currentValue.toFixed(2)}) is below ${this.drawdownProtection}% of initial investment ($${this.initialInvestment.toFixed(2)})`, 'error');
           this.stop();
           break;
         }
@@ -1611,18 +1611,18 @@ class RoninTradingBot {
    * Run a trading cycle
    */
   async runTradingCycle() {
-    if (this.#isTradeInProgress) {
+    if (this.isTradeInProgress) {
       this.log('Trading cycle already in progress, skipping', 'debug');
       return;
     }
     
-    this.#isTradeInProgress = true;
+    this.isTradeInProgress = true;
     
     try {
       this.log('--- Starting Trading Cycle ---');
       
       // Check RPC health
-      if (!await this.#checkRpcHealth()) {
+      if (!await this.checkRpcHealth()) {
         this.log('RPC endpoint unhealthy, trying alternative', 'warn');
         await this.switchRpcEndpoint();
       }
@@ -1631,14 +1631,14 @@ class RoninTradingBot {
       await this.trackDailyBalance();
       
       // Check daily loss limit
-      if (this.#hasHitDailyLossLimit()) {
+      if (this.hasHitDailyLossLimit()) {
         this.log('Daily loss limit reached, skipping trading cycle', 'warn');
         return;
       }
       
       // Check SOL balance for transaction fees
-      const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
-      if (solBalance < 0.01 && !this.#demoMode && !this.#simulationMode) {
+      const solBalance = await this.getTokenBalance(this.tokenRegistry.SOL);
+      if (solBalance < 0.01 && !this.demoMode && !this.simulationMode) {
         this.notify(`⚠️ Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL. Need at least 0.01 SOL`, 'alert');
         return;
       }
@@ -1666,7 +1666,7 @@ class RoninTradingBot {
         );
       }
     } finally {
-      this.#isTradeInProgress = false;
+      this.isTradeInProgress = false;
       this.log('--- Trading Cycle Completed ---');
     }
   }
@@ -1676,12 +1676,12 @@ class RoninTradingBot {
    * @returns {Promise<boolean>} RPC health status
    * @private
    */
-  async #checkRpcHealth() {
+  async checkRpcHealth() {
     try {
       const startTime = Date.now();
       await Promise.race([
-        this.#connection.getVersion(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), this.#rpcHealthTimeout))
+        this.connection.getVersion(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('RPC Timeout')), this.rpcHealthTimeout))
       ]);
       const responseTime = Date.now() - startTime;
       
@@ -1703,26 +1703,26 @@ class RoninTradingBot {
    */
   async getTokenBalance(mint) {
     // If in demo mode, return demo balance
-    if (this.#demoMode) {
-      return this.#demoFunds[mint] || 0;
+    if (this.demoMode) {
+      return this.demoFunds[mint] || 0;
     }
     
     const MAX_RETRIES = 3;
     for (let retries = 0; retries < MAX_RETRIES; retries++) {
       try {
-        if (mint === this.#tokenRegistry.SOL) {
-          return (await this.#connection.getBalance(this.#wallet.publicKey)) / 1e9;
+        if (mint === this.tokenRegistry.SOL) {
+          return (await this.connection.getBalance(this.wallet.publicKey)) / 1e9;
         }
 
         const tokenAccount = await getAssociatedTokenAddressSync(
           new PublicKey(mint),
-          this.#wallet.publicKey,
+          this.wallet.publicKey,
           false,
           TOKEN_PROGRAM_ID
         );
 
         try {
-          const info = await this.#connection.getTokenAccountBalance(tokenAccount);
+          const info = await this.connection.getTokenAccountBalance(tokenAccount);
           return parseFloat(info.value.amount) / (10 ** info.value.decimals);
         } catch (e) {
           if (e.message.includes('Account not found') || e.message.includes('could not find account')) {
@@ -1732,25 +1732,25 @@ class RoninTradingBot {
         }
       } catch (e) {
         if (retries + 1 === MAX_RETRIES) {
-          this.log(`Failed to get balance for ${this.#mintToSymbol(mint)}: ${e.message}`, 'error');
+          this.log(`Failed to get balance for ${this.mintToSymbol(mint)}: ${e.message}`, 'error');
           
           // If we've retried with the current endpoint, try switching RPC
           if (await this.switchRpcEndpoint()) {
             // One more try with new endpoint
             try {
-              if (mint === this.#tokenRegistry.SOL) {
-                return (await this.#connection.getBalance(this.#wallet.publicKey)) / 1e9;
+              if (mint === this.tokenRegistry.SOL) {
+                return (await this.connection.getBalance(this.wallet.publicKey)) / 1e9;
               }
               const tokenAccount = await getAssociatedTokenAddressSync(
                 new PublicKey(mint),
-                this.#wallet.publicKey,
+                this.wallet.publicKey,
                 false,
                 TOKEN_PROGRAM_ID
               );
-              const info = await this.#connection.getTokenAccountBalance(tokenAccount);
+              const info = await this.connection.getTokenAccountBalance(tokenAccount);
               return parseFloat(info.value.amount) / (10 ** info.value.decimals);
             } catch {
-              return this.#inStopLossMode ? 0.01 : 0; // In stop loss mode, return small non-zero to avoid dust check
+              return this.inStopLossMode ? 0.01 : 0; // In stop loss mode, return small non-zero to avoid dust check
             }
           }
           
@@ -1772,60 +1772,60 @@ class RoninTradingBot {
    */
   async getTokenDecimals(mint) {
     // Check cache first
-    if (this.#tokenDecimalCache.has(mint)) {
-      return this.#tokenDecimalCache.get(mint);
+    if (this.tokenDecimalCache.has(mint)) {
+      return this.tokenDecimalCache.get(mint);
     }
 
     // Special case for SOL
-    if (mint === this.#tokenRegistry.SOL) {
-      this.#tokenDecimalCache.set(mint, 9);
+    if (mint === this.tokenRegistry.SOL) {
+      this.tokenDecimalCache.set(mint, 9);
       return 9;
     }
 
     try {
       // Get token metadata from Solana
-      const info = await this.#connection.getParsedAccountInfo(new PublicKey(mint));
+      const info = await this.connection.getParsedAccountInfo(new PublicKey(mint));
       
       if (info && info.value && info.value.data && 'parsed' in info.value.data) {
         const parsedData = info.value.data.parsed;
         if (parsedData && parsedData.info && parsedData.info.decimals) {
           const decimals = parsedData.info.decimals;
-          this.#tokenDecimalCache.set(mint, decimals);
+          this.tokenDecimalCache.set(mint, decimals);
           return decimals;
         }
       }
       
       // Fallbacks for common tokens
       const commonDecimals = {
-        [this.#tokenRegistry.USDC]: 6,
-        [this.#tokenRegistry.USDT]: 6,
-        [this.#tokenRegistry.BONK]: 5,
-        [this.#tokenRegistry.MSOL]: 9,
-        [this.#tokenRegistry.SAMO]: 9,
-        [this.#tokenRegistry.JUP]: 6,
+        [this.tokenRegistry.USDC]: 6,
+        [this.tokenRegistry.USDT]: 6,
+        [this.tokenRegistry.BONK]: 5,
+        [this.tokenRegistry.MSOL]: 9,
+        [this.tokenRegistry.SAMO]: 9,
+        [this.tokenRegistry.JUP]: 6,
       };
       
       if (commonDecimals[mint]) {
-        this.#tokenDecimalCache.set(mint, commonDecimals[mint]);
+        this.tokenDecimalCache.set(mint, commonDecimals[mint]);
         return commonDecimals[mint];
       }
       
       // Default to 9 decimals
-      this.log(`Could not determine decimals for ${this.#mintToSymbol(mint)}, using default of 9`, 'warn');
-      this.#tokenDecimalCache.set(mint, 9);
+      this.log(`Could not determine decimals for ${this.mintToSymbol(mint)}, using default of 9`, 'warn');
+      this.tokenDecimalCache.set(mint, 9);
       return 9;
     } catch (error) {
-      this.log(`Error getting token decimals for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
+      this.log(`Error getting token decimals for ${this.mintToSymbol(mint)}: ${error.message}`, 'error');
       
       if (error.message.includes('rate limit') || error.message.includes('429')) {
         // Try with a different RPC endpoint
         await this.switchRpcEndpoint();
         // Retry once with new endpoint
         try {
-          const info = await this.#connection.getParsedAccountInfo(new PublicKey(mint));
+          const info = await this.connection.getParsedAccountInfo(new PublicKey(mint));
           if (info && info.value && info.value.data && 'parsed' in info.value.data) {
             const decimals = info.value.data.parsed.info.decimals;
-            this.#tokenDecimalCache.set(mint, decimals);
+            this.tokenDecimalCache.set(mint, decimals);
             return decimals;
           }
         } catch {
@@ -1834,7 +1834,7 @@ class RoninTradingBot {
       }
       
       // Default to 9 decimals
-      this.#tokenDecimalCache.set(mint, 9);
+      this.tokenDecimalCache.set(mint, 9);
       return 9;
     }
   }
@@ -1847,15 +1847,15 @@ class RoninTradingBot {
   async getTokenPrice(mint) {
     try {
       // Check cache first
-      const cached = this.#tokenPriceCache.get(mint);
+      const cached = this.tokenPriceCache.get(mint);
       const now = Date.now();
-      if (cached && (now - cached.timestamp) < this.#priceCacheTTL) {
+      if (cached && (now - cached.timestamp) < this.priceCacheTTL) {
         return cached.price;
       }
 
       // Special case for stablecoins
-      if (this.#isStablecoin(mint)) {
-        this.#tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
+      if (this.isStablecoin(mint)) {
+        this.tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
         return 1.0;
       }
 
@@ -1863,7 +1863,7 @@ class RoninTradingBot {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           // Use circuit breaker for Jupiter API calls
-          return await this.#jupiterQuoteCircuitBreaker.execute(
+          return await this.jupiterQuoteCircuitBreaker.execute(
             async () => {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -1879,7 +1879,7 @@ class RoninTradingBot {
 
                 if (data?.data?.[mint]?.price) {
                   const price = data.data[mint].price;
-                  this.#tokenPriceCache.set(mint, { price, timestamp: now });
+                  this.tokenPriceCache.set(mint, { price, timestamp: now });
                   return price;
                 }
                 throw new Error('Invalid price data format');
@@ -1890,14 +1890,14 @@ class RoninTradingBot {
             },
             async () => {
               // Fallback when circuit is open
-              return await this.#getTokenPriceFallback(mint);
+              return await this.getTokenPriceFallback(mint);
             }
           );
         } catch (error) {
           // If last attempt, log and use fallback
           if (attempt === 2) {
-            this.log(`Error fetching token price for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
-            return await this.#getTokenPriceFallback(mint);
+            this.log(`Error fetching token price for ${this.mintToSymbol(mint)}: ${error.message}`, 'error');
+            return await this.getTokenPriceFallback(mint);
           }
           
           // Otherwise retry with backoff
@@ -1908,9 +1908,9 @@ class RoninTradingBot {
         }
       }
 
-      return await this.#getTokenPriceFallback(mint);
+      return await this.getTokenPriceFallback(mint);
     } catch (error) {
-      return await this.#getTokenPriceFallback(mint);
+      return await this.getTokenPriceFallback(mint);
     }
   }
   
@@ -1920,22 +1920,22 @@ class RoninTradingBot {
    * @returns {Promise<number>} Token price in USD
    * @private 
    */
-  async #getTokenPriceFallback(mint) {
+  async getTokenPriceFallback(mint) {
     try {
       // Fallbacks for common tokens
       const fallbackPrices = {
-        [this.#tokenRegistry.SOL]: 150,
-        [this.#tokenRegistry.BONK]: 0.00001,
-        [this.#tokenRegistry.SAMO]: 0.02,
-        [this.#tokenRegistry.MSOL]: 155,
-        [this.#tokenRegistry.JUP]: 0.5,
+        [this.tokenRegistry.SOL]: 150,
+        [this.tokenRegistry.BONK]: 0.00001,
+        [this.tokenRegistry.SAMO]: 0.02,
+        [this.tokenRegistry.MSOL]: 155,
+        [this.tokenRegistry.JUP]: 0.5,
       };
 
       if (fallbackPrices[mint]) {
-        this.log(`Using fallback price for ${this.#mintToSymbol(mint)}: $${fallbackPrices[mint]}`, 'warn');
-        this.#tokenPriceCache.set(mint, {
+        this.log(`Using fallback price for ${this.mintToSymbol(mint)}: $${fallbackPrices[mint]}`, 'warn');
+        this.tokenPriceCache.set(mint, {
           price: fallbackPrices[mint],
-          timestamp: Date.now() - (this.#priceCacheTTL / 2) // Shorter cache time for fallbacks
+          timestamp: Date.now() - (this.priceCacheTTL / 2) // Shorter cache time for fallbacks
         });
         return fallbackPrices[mint];
       }
@@ -1953,12 +1953,12 @@ class RoninTradingBot {
    * @returns {string} Token symbol or shortened address
    * @private 
    */
-  #mintToSymbol(mint) {
-    const cachedToken = this.#discoveredTokens.get(mint);
+  mintToSymbol(mint) {
+    const cachedToken = this.discoveredTokens.get(mint);
     if (cachedToken) return cachedToken.symbol;
     
     // Check registry
-    for (const [symbol, address] of Object.entries(this.#tokenRegistry)) {
+    for (const [symbol, address] of Object.entries(this.tokenRegistry)) {
       if (address === mint) return symbol;
     }
     
@@ -1972,10 +1972,10 @@ class RoninTradingBot {
    * @returns {boolean} Whether the token is a stablecoin
    * @private
    */
-  #isStablecoin(mint) {
+  isStablecoin(mint) {
     const stablecoins = [
-      this.#tokenRegistry.USDC,
-      this.#tokenRegistry.USDT,
+      this.tokenRegistry.USDC,
+      this.tokenRegistry.USDT,
       // Add other stablecoins
       'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
       'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
@@ -1995,13 +1995,13 @@ class RoninTradingBot {
    */
   async getJupiterQuote(inputMint, outputMint, amount, slippageBps = 50) {
     // Use token-specific slippage if available
-    const inputSymbol = this.#mintToSymbol(inputMint);
-    const outputSymbol = this.#mintToSymbol(outputMint);
+    const inputSymbol = this.mintToSymbol(inputMint);
+    const outputSymbol = this.mintToSymbol(outputMint);
     
-    const tokenSlippage = this.#tokenSlippage[inputMint] || 
-                          this.#tokenSlippage[outputMint] || 
-                          this.#tokenSlippage[inputSymbol] ||
-                          this.#tokenSlippage[outputSymbol] ||
+    const tokenSlippage = this.tokenSlippage[inputMint] || 
+                          this.tokenSlippage[outputMint] || 
+                          this.tokenSlippage[inputSymbol] ||
+                          this.tokenSlippage[outputSymbol] ||
                           0.5; // Default 0.5%
     
     // Convert slippage from percentage to basis points if not provided
@@ -2025,7 +2025,7 @@ class RoninTradingBot {
       });
 
       // Use circuit breaker for Jupiter API
-      return await this.#jupiterQuoteCircuitBreaker.execute(
+      return await this.jupiterQuoteCircuitBreaker.execute(
         async () => {
           const MAX_RETRIES = 3;
           let lastError = null;
@@ -2035,7 +2035,7 @@ class RoninTradingBot {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 15000);
               
-              const response = await fetch(`${this.#jupiterApiUrl}/quote?${params}`, {
+              const response = await fetch(`${this.jupiterApiUrl}/quote?${params}`, {
                 signal: controller.signal
               });
               clearTimeout(timeoutId);
@@ -2090,7 +2090,7 @@ class RoninTradingBot {
   async createSwapTransaction(quote, slippageBps) {
     try {
       // Use circuit breaker for Jupiter swap API
-      return await this.#jupiterSwapCircuitBreaker.execute(
+      return await this.jupiterSwapCircuitBreaker.execute(
         async () => {
           const MAX_RETRIES = 2;
           let lastError = null;
@@ -2100,14 +2100,14 @@ class RoninTradingBot {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 30000);
               
-              const response = await fetch(`${this.#jupiterApiUrl}/swap`, {
+              const response = await fetch(`${this.jupiterApiUrl}/swap`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                   route: quote,
-                  userPublicKey: this.#wallet.publicKey.toString(),
+                  userPublicKey: this.wallet.publicKey.toString(),
                   slippageBps
                 }),
                 signal: controller.signal
@@ -2137,7 +2137,7 @@ class RoninTradingBot {
                   // Sign the transaction properly with nacl
                   const signature = nacl.sign.detached(
                     versionedTx.message.serialize(),
-                    this.#wallet.secretKey
+                    this.wallet.secretKey
                   );
                   versionedTx.signatures[0] = signature;
                   
@@ -2148,7 +2148,7 @@ class RoninTradingBot {
                   const legacyTx = Transaction.from(messageBytes);
                   
                   // Partial sign with our wallet
-                  legacyTx.partialSign(this.#wallet);
+                  legacyTx.partialSign(this.wallet);
                   return legacyTx;
                 }
               } catch (error) {
@@ -2197,16 +2197,16 @@ class RoninTradingBot {
    * @returns {Promise<number>} Estimated fee in lamports
    * @private 
    */
-  async #estimateTransactionFee() {
+  async estimateTransactionFee() {
     try {
       // Use cached estimate if available and not expired
       const now = Date.now();
-      if (this.#cachedFeeEstimate && now < this.#cachedFeeEstimate.expiresAt) {
-        return this.#cachedFeeEstimate.fee;
+      if (this.cachedFeeEstimate && now < this.cachedFeeEstimate.expiresAt) {
+        return this.cachedFeeEstimate.fee;
       }
 
       // Get recent blockhash and fee calculator
-      const { feeCalculator, blockhash } = await this.#connection.getRecentBlockhash('finalized');
+      const { feeCalculator, blockhash } = await this.connection.getRecentBlockhash('finalized');
 
       // Base fee in lamports
       const baseFee = feeCalculator ? feeCalculator.lamportsPerSignature : 5000;
@@ -2214,10 +2214,10 @@ class RoninTradingBot {
       // Get priority fee estimates
       let priorityFee = 0;
       try {
-        const priorityFeeResponse = await this.#connection.getRecentPrioritizationFees();
+        const priorityFeeResponse = await this.connection.getRecentPrioritizationFees();
         if (priorityFeeResponse && priorityFeeResponse.length > 0) {
           // Use market volatility to determine percentile for fees
-          const marketVolatility = parseFloat(this.#getStoredValue('marketVolatility') || '0');
+          const marketVolatility = parseFloat(this.getStoredValue('marketVolatility') || '0');
           
           const sortedFees = priorityFeeResponse
             .map(item => item.prioritizationFee)
@@ -2249,7 +2249,7 @@ class RoninTradingBot {
 
       // Cache this estimate
       const cacheMs = 10000; // 10 second cache
-      this.#cachedFeeEstimate = {
+      this.cachedFeeEstimate = {
         fee: estimatedFee,
         timestamp: now,
         expiresAt: now + cacheMs,
@@ -2268,13 +2268,13 @@ class RoninTradingBot {
    * @returns {Promise<number>} Timeout in milliseconds
    * @private
    */
-  async #getAdaptiveTransactionTimeout() {
+  async getAdaptiveTransactionTimeout() {
     try {
       // Base timeout
-      let timeout = this.#transactionTimeoutMs;
+      let timeout = this.transactionTimeoutMs;
       
       // Check network congestion
-      const performanceSamples = await this.#connection.getRecentPerformanceSamples(5);
+      const performanceSamples = await this.connection.getRecentPerformanceSamples(5);
       if (performanceSamples && performanceSamples.length > 0) {
         // Calculate average TPS
         const averageTps = performanceSamples.reduce((sum, sample) => sum + sample.numTransactions / sample.samplePeriodSecs, 0) / performanceSamples.length;
@@ -2292,7 +2292,7 @@ class RoninTradingBot {
       return timeout;
     } catch (error) {
       // If we can't determine network conditions, use default
-      return this.#transactionTimeoutMs;
+      return this.transactionTimeoutMs;
     }
   }
   
@@ -2303,14 +2303,14 @@ class RoninTradingBot {
    * @returns {Promise<string|null>} Confirmed signature or null if timed out
    * @private 
    */
-  async #waitForConfirmation(signature, timeoutMs = this.#transactionTimeoutMs) {
+  async waitForConfirmation(signature, timeoutMs = this.transactionTimeoutMs) {
     const startTime = Date.now();
     let checkCount = 0;
     
     while (Date.now() - startTime < timeoutMs) {
       try {
         checkCount++;
-        const confirmation = await this.#connection.getSignatureStatus(signature);
+        const confirmation = await this.connection.getSignatureStatus(signature);
         
         if (confirmation && confirmation.value && 
             (confirmation.value.confirmationStatus === 'confirmed' || 
@@ -2337,8 +2337,8 @@ class RoninTradingBot {
    * @returns {Promise<string|null>} Transaction signature or null if failed
    * @private 
    */
-  async #sendAndConfirmTransaction(transaction) {
-    const maxRetries = this.#maxTransactionRetries;
+  async sendAndConfirmTransaction(transaction) {
+    const maxRetries = this.maxTransactionRetries;
     let currentRetry = 0;
 
     while (currentRetry < maxRetries) {
@@ -2346,14 +2346,14 @@ class RoninTradingBot {
         let signature;
         
         // Use adaptive timeout based on network congestion
-        const adaptiveTimeoutMs = await this.#getAdaptiveTransactionTimeout();
+        const adaptiveTimeoutMs = await this.getAdaptiveTransactionTimeout();
         
         if (transaction instanceof VersionedTransaction) {
           // Handle versioned transaction
-          signature = await this.#connection.sendTransaction(transaction);
+          signature = await this.connection.sendTransaction(transaction);
           
           // Wait for confirmation with adaptive timeout
-          const confirmedSig = await this.#waitForConfirmation(signature, adaptiveTimeoutMs);
+          const confirmedSig = await this.waitForConfirmation(signature, adaptiveTimeoutMs);
           
           if (confirmedSig) {
             return confirmedSig;
@@ -2361,14 +2361,14 @@ class RoninTradingBot {
           throw new Error('Transaction confirmation timed out');
         } else {
           // Handle legacy transaction
-          signature = await this.#connection.sendTransaction(transaction, [this.#wallet], {
+          signature = await this.connection.sendTransaction(transaction, [this.wallet], {
             skipPreflight: false,
             preflightCommitment: 'confirmed',
             maxRetries: 5
           });
           
           // Wait for confirmation
-          const confirmedSig = await this.#waitForConfirmation(signature, adaptiveTimeoutMs);
+          const confirmedSig = await this.waitForConfirmation(signature, adaptiveTimeoutMs);
           
           if (confirmedSig) {
             return confirmedSig;
@@ -2422,7 +2422,7 @@ class RoninTradingBot {
    * @returns {Promise<boolean>} Success or failure
    */
   async ensureTokenAccount(mint) {
-    if (mint === this.#tokenRegistry.SOL) {
+    if (mint === this.tokenRegistry.SOL) {
       // SOL doesn't need an associated token account
       return true;
     }
@@ -2431,39 +2431,39 @@ class RoninTradingBot {
       const mintPubkey = new PublicKey(mint);
       const associatedTokenAddress = getAssociatedTokenAddressSync(
         mintPubkey,
-        this.#wallet.publicKey,
+        this.wallet.publicKey,
         false,
         TOKEN_PROGRAM_ID
       );
       
       // Check if account exists
-      const account = await this.#connection.getAccountInfo(associatedTokenAddress);
+      const account = await this.connection.getAccountInfo(associatedTokenAddress);
       
       if (account) {
         return true; // Account exists
       }
       
       // Account doesn't exist, create it
-      this.log(`Creating token account for ${this.#mintToSymbol(mint)}`);
+      this.log(`Creating token account for ${this.mintToSymbol(mint)}`);
       
       const transaction = new Transaction().add(
         createAssociatedTokenAccountInstruction(
-          this.#wallet.publicKey, // payer
+          this.wallet.publicKey, // payer
           associatedTokenAddress, // associated token account
-          this.#wallet.publicKey, // owner
+          this.wallet.publicKey, // owner
           mintPubkey, // mint
           TOKEN_PROGRAM_ID
         )
       );
       
       // Get recent blockhash
-      const { blockhash } = await this.#connection.getRecentBlockhash('finalized');
+      const { blockhash } = await this.connection.getRecentBlockhash('finalized');
       transaction.recentBlockhash = blockhash;
-      transaction.feePayer = this.#wallet.publicKey;
+      transaction.feePayer = this.wallet.publicKey;
       
       // Sign and send transaction
-      transaction.sign(this.#wallet);
-      const signature = await this.#sendAndConfirmTransaction(transaction);
+      transaction.sign(this.wallet);
+      const signature = await this.sendAndConfirmTransaction(transaction);
       
       if (!signature) {
         throw new Error('Failed to create token account');
@@ -2472,14 +2472,14 @@ class RoninTradingBot {
       return true;
     } catch (error) {
       // Try one more time with a different RPC endpoint
-      if (this.#rpcEndpoints.length > 1) {
+      if (this.rpcEndpoints.length > 1) {
         try {
           await this.switchRpcEndpoint();
           return await this.ensureTokenAccount(mint);
         } catch (e) {}
       }
       
-      this.log(`Error creating token account for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
+      this.log(`Error creating token account for ${this.mintToSymbol(mint)}: ${error.message}`, 'error');
       return false;
     }
   }
@@ -2494,17 +2494,17 @@ class RoninTradingBot {
       try {
         // If checked recently, use cached value to avoid API spam
         const now = Date.now();
-        if (now - this.#lastBalanceCheck < 60000 && this.#lastBalanceCheck > 0) {
-          return this.#currentPortfolioValue || 0;
+        if (now - this.lastBalanceCheck < 60000 && this.lastBalanceCheck > 0) {
+          return this.currentPortfolioValue || 0;
         }
         
         const uniqueTokens = new Set();
 
         // Add all tokens from registry
-        Object.values(this.#tokenRegistry).forEach(mint => uniqueTokens.add(mint));
+        Object.values(this.tokenRegistry).forEach(mint => uniqueTokens.add(mint));
 
         // Add discovered tokens if we have any
-        this.#discoveredTokens.forEach((_, mint) => uniqueTokens.add(mint));
+        this.discoveredTokens.forEach((_, mint) => uniqueTokens.add(mint));
 
         // Get all token prices in one request
         const tokenArray = Array.from(uniqueTokens);
@@ -2530,23 +2530,23 @@ class RoninTradingBot {
             const price = prices.get(mint) || await this.getTokenPrice(mint);
             const value = balance * price;
             totalValue += value;
-            this.log(`${this.#mintToSymbol(mint)}: ${balance.toFixed(6)} @ $${price.toFixed(6)} = $${value.toFixed(2)}`, 'debug');
+            this.log(`${this.mintToSymbol(mint)}: ${balance.toFixed(6)} @ $${price.toFixed(6)} = $${value.toFixed(2)}`, 'debug');
           }
         }
 
-        this.#lastBalanceCheck = now;
-        this.#currentPortfolioValue = totalValue;
+        this.lastBalanceCheck = now;
+        this.currentPortfolioValue = totalValue;
         return totalValue;
       } catch (e) {
         if (retries + 1 === MAX_RETRIES) {
           this.log(`Portfolio value calculation failed: ${e.message}`, 'error');
-          return this.#currentPortfolioValue || 0;
+          return this.currentPortfolioValue || 0;
         }
         const backoffMs = Math.pow(2, retries) * 1000;
         await new Promise(resolve => setTimeout(resolve, backoffMs));
       }
     }
-    return this.#currentPortfolioValue || 0;
+    return this.currentPortfolioValue || 0;
   }
   
   /**
@@ -2557,13 +2557,13 @@ class RoninTradingBot {
     try {
       let totalValue = 0;
       
-      for (const [mint, amount] of Object.entries(this.#demoFunds)) {
+      for (const [mint, amount] of Object.entries(this.demoFunds)) {
         if (amount > 0) {
           const price = await this.getTokenPrice(mint);
           const value = amount * price;
           totalValue += value;
           
-          const symbol = this.#mintToSymbol(mint);
+          const symbol = this.mintToSymbol(mint);
           this.log(`Demo ${symbol}: ${amount.toFixed(6)} * $${price.toFixed(6)} = $${value.toFixed(2)}`, 'debug');
         }
       }
@@ -2586,8 +2586,8 @@ class RoninTradingBot {
    */
   async updateDemoBalancesForTrade(fromMint, toMint, fromAmount, toAmount, strategy) {
     // Get token symbols
-    const fromSymbol = this.#mintToSymbol(fromMint);
-    const toSymbol = this.#mintToSymbol(toMint);
+    const fromSymbol = this.mintToSymbol(fromMint);
+    const toSymbol = this.mintToSymbol(toMint);
     
     // Calculate USD values
     const fromPrice = await this.getTokenPrice(fromMint);
@@ -2600,13 +2600,13 @@ class RoninTradingBot {
     const tradeProfitUsd = toValueUsd - fromValueUsd;
     
     // Update demo balances
-    this.#demoFunds[fromMint] = (this.#demoFunds[fromMint] || 0) - fromAmount;
-    if (this.#demoFunds[fromMint] < 0) this.#demoFunds[fromMint] = 0; // Prevent negative balances
+    this.demoFunds[fromMint] = (this.demoFunds[fromMint] || 0) - fromAmount;
+    if (this.demoFunds[fromMint] < 0) this.demoFunds[fromMint] = 0; // Prevent negative balances
     
-    this.#demoFunds[toMint] = (this.#demoFunds[toMint] || 0) + toAmount;
+    this.demoFunds[toMint] = (this.demoFunds[toMint] || 0) + toAmount;
     
     // Update P&L
-    this.#demoProfitLoss += tradeProfitUsd;
+    this.demoProfitLoss += tradeProfitUsd;
     
     // Create trade record
     const trade = {
@@ -2625,9 +2625,9 @@ class RoninTradingBot {
     };
     
     // Add to history
-    this.#demoTradeHistory.push(trade);
-    if (this.#demoTradeHistory.length > this.#maxTradeHistoryLength) {
-      this.#demoTradeHistory = this.#demoTradeHistory.slice(-this.#maxTradeHistoryLength);
+    this.demoTradeHistory.push(trade);
+    if (this.demoTradeHistory.length > this.maxTradeHistoryLength) {
+      this.demoTradeHistory = this.demoTradeHistory.slice(-this.maxTradeHistoryLength);
     }
     
     // Save updated demo funds
@@ -2651,11 +2651,11 @@ class RoninTradingBot {
       const uncachedMints = [];
       
       for (const mint of mints) {
-        const cached = this.#tokenPriceCache.get(mint);
-        if (cached && (now - cached.timestamp) < this.#priceCacheTTL) {
+        const cached = this.tokenPriceCache.get(mint);
+        if (cached && (now - cached.timestamp) < this.priceCacheTTL) {
           results.set(mint, cached.price);
-        } else if (this.#isStablecoin(mint)) {
-          this.#tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
+        } else if (this.isStablecoin(mint)) {
+          this.tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
           results.set(mint, 1.0);
         } else {
           uncachedMints.push(mint);
@@ -2670,7 +2670,7 @@ class RoninTradingBot {
       // Create comma-separated list of mints
       const mintsList = uncachedMints.join(',');
       
-      return await this.#jupiterQuoteCircuitBreaker.execute(
+      return await this.jupiterQuoteCircuitBreaker.execute(
         async () => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -2690,7 +2690,7 @@ class RoninTradingBot {
               const price = tokenData.price || 0;
               
               // Cache the response
-              this.#tokenPriceCache.set(mint, {
+              this.tokenPriceCache.set(mint, {
                 price,
                 timestamp: now
               });
@@ -2708,7 +2708,7 @@ class RoninTradingBot {
         async () => {
           // Fallback: provide fallback prices for known tokens, zeros for others
           for (const mint of uncachedMints) {
-            const fallbackPrice = await this.#getTokenPriceFallback(mint);
+            const fallbackPrice = await this.getTokenPriceFallback(mint);
             results.set(mint, fallbackPrice);
           }
           return results;
@@ -2738,19 +2738,19 @@ class RoninTradingBot {
    * @param {Object} trade Trade details
    * @private 
    */
-  #addTradeToHistory(trade) {
+  addTradeToHistory(trade) {
     // Add to in-memory history
-    this.#tradeHistory.push(trade);
+    this.tradeHistory.push(trade);
 
     // Limit history size
-    if (this.#tradeHistory.length > this.#maxTradeHistoryLength) {
-      this.#tradeHistory = this.#tradeHistory.slice(-this.#maxTradeHistoryLength);
+    if (this.tradeHistory.length > this.maxTradeHistoryLength) {
+      this.tradeHistory = this.tradeHistory.slice(-this.maxTradeHistoryLength);
     }
 
     // Queue trade storage to disk
-    this.#queueFileOperation(async () => {
+    this.queueFileOperation(async () => {
       try {
-        const tradesFile = path.join(this.#dataDir, 'trades.json');
+        const tradesFile = path.join(this.dataDir, 'trades.json');
         await appendFileAsync(tradesFile, JSON.stringify(trade) + '\n');
       } catch (error) {
         this.log(`Error saving trade to history: ${error.message}`, 'error');
@@ -2758,10 +2758,10 @@ class RoninTradingBot {
     });
 
     // Update trade stats in storage
-    this.#setStoredValue('totalTrades', (this.#successfulTrades + this.#failedTrades).toString());
-    this.#setStoredValue('successfulTrades', this.#successfulTrades.toString());
-    this.#setStoredValue('failedTrades', this.#failedTrades.toString());
-    this.#setStoredValue('profitLoss', this.#totalProfitLoss.toString());
+    this.setStoredValue('totalTrades', (this.successfulTrades + this.failedTrades).toString());
+    this.setStoredValue('successfulTrades', this.successfulTrades.toString());
+    this.setStoredValue('failedTrades', this.failedTrades.toString());
+    this.setStoredValue('profitLoss', this.totalProfitLoss.toString());
   }
   
   /**
@@ -2770,10 +2770,10 @@ class RoninTradingBot {
    * @returns {Array} Trade history
    */
   getTradeHistory(limit = 20) {
-    if (this.#demoMode) {
-      return this.#demoTradeHistory.slice(-limit);
+    if (this.demoMode) {
+      return this.demoTradeHistory.slice(-limit);
     }
-    return this.#tradeHistory.slice(-limit);
+    return this.tradeHistory.slice(-limit);
   }
   
   /**
@@ -2785,17 +2785,17 @@ class RoninTradingBot {
    * @returns {Promise<boolean>} Success or failure 
    */
   async executeTrade(fromMint, toMint, amount, strategy) {
-    if (this.#isTradeInProgress && strategy !== 'STOP_LOSS') {
+    if (this.isTradeInProgress && strategy !== 'STOP_LOSS') {
       this.log('Another trade is in progress, skipping', 'warn');
       return false;
     }
     
-    this.#isTradeInProgress = true;
+    this.isTradeInProgress = true;
     
     try {
-      const fromSymbol = this.#mintToSymbol(fromMint);
-      const toSymbol = this.#mintToSymbol(toMint);
-      const tradeType = strategy === 'ARBITRAGE' ? 'SWAP' : (fromMint === this.#tokenRegistry.USDC ? 'BUY' : 'SELL');
+      const fromSymbol = this.mintToSymbol(fromMint);
+      const toSymbol = this.mintToSymbol(toMint);
+      const tradeType = strategy === 'ARBITRAGE' ? 'SWAP' : (fromMint === this.tokenRegistry.USDC ? 'BUY' : 'SELL');
 
       this.notify(`Preparing to trade ${amount.toFixed(6)} ${fromSymbol} to ${toSymbol}`);
 
@@ -2824,7 +2824,7 @@ class RoninTradingBot {
       const adjustedAmount = amount * 0.99; // Leave 1% for fees
       
       // In demo mode, simulate the trade
-      if (this.#demoMode) {
+      if (this.demoMode) {
         // Get quote to determine expected output
         const quote = await this.getJupiterQuote(fromMint, toMint, adjustedAmount);
         if (!quote) {
@@ -2862,7 +2862,7 @@ class RoninTradingBot {
       }
       
       // In simulation mode, just log the trade
-      if (this.#simulationMode) {
+      if (this.simulationMode) {
         this.notify(`[SIMULATION] Would trade ${adjustedAmount.toFixed(6)} ${fromSymbol} to ${toSymbol}`);
         
         // Get quote to determine expected output
@@ -2878,8 +2878,8 @@ class RoninTradingBot {
         const profit = (expectedOutput * toPrice) - fromValueUsd;
         
         // Record successful trade
-        this.#successfulTrades++;
-        this.#totalProfitLoss += profit;
+        this.successfulTrades++;
+        this.totalProfitLoss += profit;
         
         // Send notification
         await this.sendDiscordTradeNotification({
@@ -2894,7 +2894,7 @@ class RoninTradingBot {
         });
         
         // Add to trade history
-        this.#addTradeToHistory({
+        this.addTradeToHistory({
           timestamp: new Date().toISOString(),
           strategy,
           tradeType,
@@ -2917,7 +2917,7 @@ class RoninTradingBot {
       }
       
       // Live trading mode - check if wallet is read-only
-      if (this.#walletType === 'readOnly') {
+      if (this.walletType === 'readOnly') {
         this.notify('Cannot execute trade in read-only mode', 'error');
         return false;
       }
@@ -2935,7 +2935,7 @@ class RoninTradingBot {
       const quote = await this.getJupiterQuote(fromMint, toMint, adjustedAmount);
       if (!quote) {
         this.notify(`Failed to get Jupiter quote for ${fromSymbol} → ${toSymbol}`, 'error');
-        this.#failedTrades++;
+        this.failedTrades++;
         return false;
       }
       
@@ -2948,8 +2948,8 @@ class RoninTradingBot {
       const priceImpact = quote.priceImpactPct || 0;
       
       // Get token-specific slippage settings
-      const inputTokenSlippage = this.#tokenSlippage[fromMint] || this.#tokenSlippage[fromSymbol] || 0.5;
-      const outputTokenSlippage = this.#tokenSlippage[toMint] || this.#tokenSlippage[toSymbol] || 0.5;
+      const inputTokenSlippage = this.tokenSlippage[fromMint] || this.tokenSlippage[fromSymbol] || 0.5;
+      const outputTokenSlippage = this.tokenSlippage[toMint] || this.tokenSlippage[toSymbol] || 0.5;
       
       // Use the higher of the two token slippages as base
       let slippage = Math.max(inputTokenSlippage, outputTokenSlippage);
@@ -2975,22 +2975,22 @@ class RoninTradingBot {
       const transaction = await this.createSwapTransaction(quote, slippageBps);
       if (!transaction) {
         this.notify(`Failed to create swap transaction`, 'error');
-        this.#failedTrades++;
+        this.failedTrades++;
         return false;
       }
       
       // Calculate estimated fee before sending
-      const estimatedFeeInLamports = await this.#estimateTransactionFee();
-      const solPrice = await this.getTokenPrice(this.#tokenRegistry.SOL);
+      const estimatedFeeInLamports = await this.estimateTransactionFee();
+      const solPrice = await this.getTokenPrice(this.tokenRegistry.SOL);
       const estimatedFeeUsd = (estimatedFeeInLamports / 1e9) * solPrice;
       
       this.notify('Sending transaction to network...');
       
       // Send and confirm transaction
-      const txid = await this.#sendAndConfirmTransaction(transaction);
+      const txid = await this.sendAndConfirmTransaction(transaction);
       if (!txid) {
         this.notify(`Transaction failed to confirm`, 'error');
-        this.#failedTrades++;
+        this.failedTrades++;
         return false;
       }
       
@@ -3003,8 +3003,8 @@ class RoninTradingBot {
       const profitWithFees = profit - estimatedFeeUsd;
       
       // Add to successful trades count
-      this.#successfulTrades++;
-      this.#totalProfitLoss += profitWithFees;
+      this.successfulTrades++;
+      this.totalProfitLoss += profitWithFees;
       
       // Record in trade history
       const trade = {
@@ -3026,7 +3026,7 @@ class RoninTradingBot {
         status: 'success'
       };
       
-      this.#addTradeToHistory(trade);
+      this.addTradeToHistory(trade);
       
       // Send detailed notification
       await this.sendDiscordTradeNotification({
@@ -3044,10 +3044,10 @@ class RoninTradingBot {
       return true;
     } catch (error) {
       this.notify(`Trade execution failed: ${error.message}`, 'error');
-      this.#failedTrades++;
+      this.failedTrades++;
       return false;
     } finally {
-      this.#isTradeInProgress = false;
+      this.isTradeInProgress = false;
     }
   }
   
@@ -3056,43 +3056,43 @@ class RoninTradingBot {
    * @returns {Promise<void>} 
    */
   async findArbitrageOpportunities() {
-    if (this.#arbitrageActive) {
+    if (this.arbitrageActive) {
       this.log('Arbitrage strategy already running', 'debug');
       return;
     }
     
-    this.#arbitrageActive = true;
+    this.arbitrageActive = true;
     
     try {
       this.log('Checking arbitrage opportunities...');
       
       // Skip if daily loss limit hit
-      if (this.#hasHitDailyLossLimit()) {
+      if (this.hasHitDailyLossLimit()) {
         this.log('Daily loss limit reached, skipping arbitrage', 'warn');
         return;
       }
       
       // Calculate available capital
-      const portfolioValue = this.#demoMode ? 
+      const portfolioValue = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
-      const arbitrageCapital = portfolioValue * (this.#arbitrageAllocation / 100);
-      const tradeRiskAmount = arbitrageCapital * (this.#maxRiskPercentage / 100);
+      const arbitrageCapital = portfolioValue * (this.arbitrageAllocation / 100);
+      const tradeRiskAmount = arbitrageCapital * (this.maxRiskPercentage / 100);
       
       this.log(`Arbitrage capital: $${arbitrageCapital.toFixed(2)}, Trade risk: $${tradeRiskAmount.toFixed(2)}`);
       
       // Check SOL balance for fees
-      const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
-      if (solBalance < 0.01 && !this.#demoMode && !this.#simulationMode) {
+      const solBalance = await this.getTokenBalance(this.tokenRegistry.SOL);
+      if (solBalance < 0.01 && !this.demoMode && !this.simulationMode) {
         this.log(`Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL`, 'warn');
         return;
       }
       
       // Get market volatility to adjust profit threshold
-      const marketVolatility = parseFloat(this.#getStoredValue('marketVolatility') || '0');
-      let adjustedProfitThreshold = this.#minProfitThreshold;
+      const marketVolatility = parseFloat(this.getStoredValue('marketVolatility') || '0');
+      let adjustedProfitThreshold = this.minProfitThreshold;
       if (marketVolatility > 10) {
-        adjustedProfitThreshold = this.#minProfitThreshold * 1.5;
+        adjustedProfitThreshold = this.minProfitThreshold * 1.5;
       }
       
       // Track potential opportunities
@@ -3106,7 +3106,7 @@ class RoninTradingBot {
       };
       
       // Create trading pairs from token registry - fully matrix
-      const tokens = Object.entries(this.#tokenRegistry);
+      const tokens = Object.entries(this.tokenRegistry);
       const tradingPairs = [];
       
       // Add all possible combinations
@@ -3122,15 +3122,15 @@ class RoninTradingBot {
       for (const pair of tradingPairs) {
         try {
           const [fromSymbol, toSymbol] = pair.split('-');
-          const fromMint = this.#tokenRegistry[fromSymbol];
-          const toMint = this.#tokenRegistry[toSymbol];
+          const fromMint = this.tokenRegistry[fromSymbol];
+          const toMint = this.tokenRegistry[toSymbol];
           
           if (!fromMint || !toMint) continue;
           
           // Skip pairs with recent failed attempts
           const pairKey = `${fromMint}-${toMint}`;
-          const lastFailTime = parseInt(this.#getStoredValue(`lastFail_${pairKey}`) || '0');
-          const backoffPeriod = parseInt(this.#getStoredValue(`backoff_${pairKey}`) || '60000');
+          const lastFailTime = parseInt(this.getStoredValue(`lastFail_${pairKey}`) || '0');
+          const backoffPeriod = parseInt(this.getStoredValue(`backoff_${pairKey}`) || '60000');
           
           if (Date.now() - lastFailTime < backoffPeriod) continue;
           
@@ -3149,7 +3149,7 @@ class RoninTradingBot {
           }
           
           // Calculate trade size
-          const minViableAmount = this.#minimumViableAmounts[fromMint] || 0.001;
+          const minViableAmount = this.minimumViableAmounts[fromMint] || 0.001;
           const tradeSize = Math.max(
             Math.min(tradeRiskAmount / fromPrice, fromBalance * 0.98),
             minViableAmount
@@ -3161,15 +3161,15 @@ class RoninTradingBot {
           const quote = await this.getJupiterQuote(fromMint, toMint, tradeSize);
           if (!quote) {
             // Record failure with exponential backoff
-            const currentBackoff = parseInt(this.#getStoredValue(`backoff_${pairKey}`) || '60000');
+            const currentBackoff = parseInt(this.getStoredValue(`backoff_${pairKey}`) || '60000');
             const newBackoff = Math.min(currentBackoff * 2, 3600000); // Max 1 hour
-            this.#setStoredValue(`lastFail_${pairKey}`, Date.now().toString());
-            this.#setStoredValue(`backoff_${pairKey}`, newBackoff.toString());
+            this.setStoredValue(`lastFail_${pairKey}`, Date.now().toString());
+            this.setStoredValue(`backoff_${pairKey}`, newBackoff.toString());
             continue;
           }
           
           // Reset backoff on successful quote
-          this.#setStoredValue(`backoff_${pairKey}`, '60000');
+          this.setStoredValue(`backoff_${pairKey}`, '60000');
           
           // Calculate profit
           const outAmount = parseFloat(quote.outAmount) / Math.pow(10, await this.getTokenDecimals(toMint));
@@ -3179,8 +3179,8 @@ class RoninTradingBot {
           const outputValue = outAmount * toPrice;
           
           // Estimate transaction fee
-          const estimatedFeeInLamports = await this.#estimateTransactionFee();
-          const solPrice = await this.getTokenPrice(this.#tokenRegistry.SOL);
+          const estimatedFeeInLamports = await this.estimateTransactionFee();
+          const solPrice = await this.getTokenPrice(this.tokenRegistry.SOL);
           const transactionFeeUsd = (estimatedFeeInLamports / 1e9) * solPrice;
           
           // Calculate net profit after fees
@@ -3219,7 +3219,7 @@ class RoninTradingBot {
     } catch (error) {
       this.log(`Error in arbitrage strategy: ${error.message}`, 'error');
     } finally {
-      this.#arbitrageActive = false;
+      this.arbitrageActive = false;
     }
   }
   
@@ -3230,13 +3230,13 @@ class RoninTradingBot {
   async getTokenPriceMovements() {
     try {
       // Create set of unique tokens
-      const uniqueTokens = new Set(Object.values(this.#tokenRegistry));
+      const uniqueTokens = new Set(Object.values(this.tokenRegistry));
       
       // Create comma-separated list of mints
       const mints = Array.from(uniqueTokens).join(',');
       
       // Use circuit breaker for Jupiter Price API
-      return await this.#jupiterQuoteCircuitBreaker.execute(
+      return await this.jupiterQuoteCircuitBreaker.execute(
         async () => {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -3260,7 +3260,7 @@ class RoninTradingBot {
               const priceChange = (tokenData.priceChange24h || 0) * 100;
               
               // Track market volatility (excluding stablecoins)
-              if (!this.#isStablecoin(mint) && tokenData.price > 0) {
+              if (!this.isStablecoin(mint) && tokenData.price > 0) {
                 marketVolatilitySum += Math.abs(priceChange);
                 volatileTokenCount++;
               }
@@ -3277,7 +3277,7 @@ class RoninTradingBot {
               marketVolatilitySum / volatileTokenCount : 0;
             
             // Store market volatility for reference
-            this.#setStoredValue('marketVolatility', avgMarketVolatility.toString());
+            this.setStoredValue('marketVolatility', avgMarketVolatility.toString());
             
             return movements;
           } catch (error) {
@@ -3287,12 +3287,12 @@ class RoninTradingBot {
         },
         async () => {
           // Fallback when circuit is open
-          return this.#tokenMovements || new Map();
+          return this.tokenMovements || new Map();
         }
       );
     } catch (e) {
       this.log(`Error fetching price movements: ${e.message}`, 'error');
-      return this.#tokenMovements || new Map();
+      return this.tokenMovements || new Map();
     }
   }
   
@@ -3301,34 +3301,34 @@ class RoninTradingBot {
    * @returns {Promise<void>} 
    */
   async findDailyMoversOpportunities() {
-    if (this.#isTradeInProgress) {
+    if (this.isTradeInProgress) {
       this.log('Trade already in progress, skipping daily movers scan', 'debug');
       return;
     }
     
-    this.#isTradeInProgress = true;
+    this.isTradeInProgress = true;
     
     try {
       this.log('Scanning for daily movers...');
       
       // Skip if daily loss limit hit
-      if (this.#hasHitDailyLossLimit()) {
+      if (this.hasHitDailyLossLimit()) {
         this.log('Daily loss limit reached, skipping daily movers', 'warn');
         return;
       }
       
       // Calculate available capital
-      const portfolioValue = this.#demoMode ? 
+      const portfolioValue = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
-      const dailyMoverCapital = portfolioValue * (this.#dailyMoversAllocation / 100);
-      const tradeRiskAmount = dailyMoverCapital * (this.#maxRiskPercentage / 100);
+      const dailyMoverCapital = portfolioValue * (this.dailyMoversAllocation / 100);
+      const tradeRiskAmount = dailyMoverCapital * (this.maxRiskPercentage / 100);
       
       this.log(`Daily movers capital: $${dailyMoverCapital.toFixed(2)}, Trade risk: $${tradeRiskAmount.toFixed(2)}`);
       
       // Check SOL balance for fees
-      const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
-      if (solBalance < 0.01 && !this.#demoMode && !this.#simulationMode) {
+      const solBalance = await this.getTokenBalance(this.tokenRegistry.SOL);
+      if (solBalance < 0.01 && !this.demoMode && !this.simulationMode) {
         this.log(`Insufficient SOL for transaction fees: ${solBalance.toFixed(6)} SOL`, 'warn');
         return;
       }
@@ -3341,14 +3341,14 @@ class RoninTradingBot {
       }
       
       // Store for reference
-      this.#tokenMovements = tokenMovements;
+      this.tokenMovements = tokenMovements;
       
       // Check market volatility and adjust threshold
-      const marketVolatility = parseFloat(this.#getStoredValue('marketVolatility') || '0');
-      let adjustedThreshold = this.#dailyMoverThreshold;
+      const marketVolatility = parseFloat(this.getStoredValue('marketVolatility') || '0');
+      let adjustedThreshold = this.dailyMoverThreshold;
       
       if (marketVolatility > 12) {
-        adjustedThreshold = this.#dailyMoverThreshold * 1.5;
+        adjustedThreshold = this.dailyMoverThreshold * 1.5;
         this.log(`Increased daily mover threshold to ${adjustedThreshold}% due to high market volatility`);
       }
       
@@ -3356,7 +3356,7 @@ class RoninTradingBot {
       const significantMovers = [...tokenMovements.entries()]
         .filter(([mint, data]) => {
           // Skip stablecoins
-          if (this.#isStablecoin(mint)) return false;
+          if (this.isStablecoin(mint)) return false;
           
           // Skip tokens with insufficient price data
           if (!data.price || data.price === 0) return false;
@@ -3380,7 +3380,7 @@ class RoninTradingBot {
       if (significantMovers.length > 0) {
         let moversMessage = `📊 **DAILY MOVERS DETECTED**\n`;
         significantMovers.slice(0, 5).forEach(([mint, data], index) => {
-          const symbol = this.#mintToSymbol(mint);
+          const symbol = this.mintToSymbol(mint);
           const change = data.priceChange24h.toFixed(2);
           const direction = data.priceChange24h > 0 ? '📈' : '📉';
           moversMessage += `${index+1}. ${direction} **${symbol}**: ${change}% ($${(data.volume24h/1000).toFixed(0)}k vol)\n`;
@@ -3395,7 +3395,7 @@ class RoninTradingBot {
       
       // Process each significant mover
       for (const [mint, data] of significantMovers) {
-        const symbol = this.#mintToSymbol(mint);
+        const symbol = this.mintToSymbol(mint);
         this.log(`${symbol}: ${data.priceChange24h.toFixed(2)}% price change, $${data.volume24h.toFixed(0)} volume`);
         
         // Determine trade direction:
@@ -3404,8 +3404,8 @@ class RoninTradingBot {
         const direction = data.priceChange24h <= -adjustedThreshold ? 'BUY' : 'SELL';
         
         await this.tradeDailyMover(
-          direction === 'BUY' ? this.#tokenRegistry.USDC : mint,
-          direction === 'BUY' ? mint : this.#tokenRegistry.USDC,
+          direction === 'BUY' ? this.tokenRegistry.USDC : mint,
+          direction === 'BUY' ? mint : this.tokenRegistry.USDC,
           data.priceChange24h,
           direction,
           tradeRiskAmount
@@ -3417,7 +3417,7 @@ class RoninTradingBot {
     } catch (error) {
       this.log(`Error in daily movers strategy: ${error.message}`, 'error');
     } finally {
-      this.#isTradeInProgress = false;
+      this.isTradeInProgress = false;
     }
   }
   
@@ -3432,8 +3432,8 @@ class RoninTradingBot {
    */
   async tradeDailyMover(fromMint, toMint, priceChange, direction, maxTradeSize) {
     try {
-      const fromSymbol = this.#mintToSymbol(fromMint);
-      const toSymbol = this.#mintToSymbol(toMint);
+      const fromSymbol = this.mintToSymbol(fromMint);
+      const toSymbol = this.mintToSymbol(toMint);
       
       this.log(`Evaluating ${direction} opportunity for ${fromSymbol} → ${toSymbol} (${priceChange.toFixed(2)}% move)`);
       
@@ -3455,7 +3455,7 @@ class RoninTradingBot {
       }
       
       // Calculate trade size
-      const minViableAmount = this.#minimumViableAmounts[fromMint] || 0.001;
+      const minViableAmount = this.minimumViableAmounts[fromMint] || 0.001;
       const maxSafeAmount = fromBalance * 0.98;
       
       // Determine optimal trade size
@@ -3501,9 +3501,9 @@ class RoninTradingBot {
         shouldTrade = Math.abs(executionPriceChange) < 3.0;
         
         // Additional check for severe price drops (>15%)
-        if (priceChange < -15 && !this.#getStoredValue(`confirmed_drop_${toMint}`)) {
+        if (priceChange < -15 && !this.getStoredValue(`confirmed_drop_${toMint}`)) {
           // Only buy after confirming the drop in a second scan
-          this.#setStoredValue(`confirmed_drop_${toMint}`, 'true');
+          this.setStoredValue(`confirmed_drop_${toMint}`, 'true');
           this.log(`Large price drop for ${toSymbol} (${priceChange.toFixed(2)}%), waiting for confirmation`, 'warn');
           shouldTrade = false;
         }
@@ -3534,20 +3534,20 @@ class RoninTradingBot {
    */
   async checkStopLoss(mint, currentValueUsd) {
     try {
-      const symbol = this.#mintToSymbol(mint);
+      const symbol = this.mintToSymbol(mint);
       const stopLossKey = `stopLoss_${mint}`;
 
       // Get token-specific stop loss threshold
-      const stopLossThreshold = this.#getTokenStopLossThreshold(mint);
+      const stopLossThreshold = this.getTokenStopLossThreshold(mint);
 
       // Get the high-water mark for this token (if it exists)
-      const highWaterMarkStr = this.#getStoredValue(stopLossKey);
+      const highWaterMarkStr = this.getStoredValue(stopLossKey);
       let highWaterMarkUsd = highWaterMarkStr ? parseFloat(highWaterMarkStr) : 0;
 
       // If current value is higher than high-water mark, update it
       if (currentValueUsd > highWaterMarkUsd) {
         highWaterMarkUsd = currentValueUsd;
-        this.#setStoredValue(stopLossKey, highWaterMarkUsd.toString());
+        this.setStoredValue(stopLossKey, highWaterMarkUsd.toString());
         return { triggered: false };
       }
 
@@ -3571,7 +3571,7 @@ class RoninTradingBot {
 
       return { triggered: false };
     } catch (error) {
-      this.log(`Error in stop loss check for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
+      this.log(`Error in stop loss check for ${this.mintToSymbol(mint)}: ${error.message}`, 'error');
       return { triggered: false };
     }
   }
@@ -3582,11 +3582,11 @@ class RoninTradingBot {
    * @returns {number} Stop loss percentage
    * @private
    */
-  #getTokenStopLossThreshold(mint) {
-    const baseStopLoss = this.#stopLossPercentage;
-    const symbol = this.#mintToSymbol(mint);
+  getTokenStopLossThreshold(mint) {
+    const baseStopLoss = this.stopLossPercentage;
+    const symbol = this.mintToSymbol(mint);
     // Check both by mint and symbol
-    const volatilityFactor = this.#tokenVolatility[mint] || this.#tokenVolatility[symbol] || 1.0;
+    const volatilityFactor = this.tokenVolatility[mint] || this.tokenVolatility[symbol] || 1.0;
     return baseStopLoss * volatilityFactor;
   }
   
@@ -3597,24 +3597,24 @@ class RoninTradingBot {
    */
   async executeStopLossExit(mint) {
     try {
-      const symbol = this.#mintToSymbol(mint);
+      const symbol = this.mintToSymbol(mint);
       this.log(`Executing stop loss exit for ${symbol}`);
       
       // Set stop loss mode flag for price impact override
-      this.#inStopLossMode = true;
+      this.inStopLossMode = true;
 
       // Get token balance
       const balance = await this.getTokenBalance(mint);
-      const minViableAmount = this.#minimumViableAmounts[mint] || 0.001;
+      const minViableAmount = this.minimumViableAmounts[mint] || 0.001;
       
       if (balance <= minViableAmount) {
         this.log(`No significant balance for ${symbol}, skipping stop loss exit`, 'warn');
-        this.#inStopLossMode = false;
+        this.inStopLossMode = false;
         return false;
       }
 
       // Choose appropriate stable coin as destination
-      const stableMint = this.#tokenRegistry.USDC;
+      const stableMint = this.tokenRegistry.USDC;
 
       // Get exit quote - sell 98% of the balance (leave a bit for dust)
       const exitAmount = balance * 0.98;
@@ -3626,7 +3626,7 @@ class RoninTradingBot {
       const quote = await this.getJupiterQuote(mint, stableMint, exitAmount);
       if (!quote) {
         this.log(`Failed to get quote for stop loss exit of ${symbol}`, 'error');
-        this.#inStopLossMode = false;
+        this.inStopLossMode = false;
         return false;
       }
 
@@ -3640,17 +3640,17 @@ class RoninTradingBot {
 
       if (result) {
         // Reset stop loss high-water mark after successful exit
-        this.#setStoredValue(`stopLoss_${mint}`, "0");
+        this.setStoredValue(`stopLoss_${mint}`, "0");
         this.notify(`✅ Stop loss exit completed for ${symbol}`);
       } else {
         this.log(`Stop loss exit failed for ${symbol}`, 'error');
       }
       
-      this.#inStopLossMode = false;
+      this.inStopLossMode = false;
       return result;
     } catch (error) {
-      this.log(`Error executing stop loss exit for ${this.#mintToSymbol(mint)}: ${error.message}`, 'error');
-      this.#inStopLossMode = false;
+      this.log(`Error executing stop loss exit for ${this.mintToSymbol(mint)}: ${error.message}`, 'error');
+      this.inStopLossMode = false;
       return false;
     }
   }
@@ -3661,12 +3661,12 @@ class RoninTradingBot {
    * @returns {Promise<Object>} Scan results
    */
   async scanChainForOpportunities(durationMs = 60000) {
-    if (this.#tokenDiscoveryActive) {
+    if (this.tokenDiscoveryActive) {
       this.notify('Chain scan already in progress');
-      return this.#scanResults;
+      return this.scanResults;
     }
     
-    this.#tokenDiscoveryActive = true;
+    this.tokenDiscoveryActive = true;
     const startTime = Date.now();
     this.notify(`Starting Solana chain scan (minimum ${durationMs/1000} seconds)...`);
     
@@ -3705,7 +3705,7 @@ class RoninTradingBot {
       const arbitrageOpportunities = opportunities.filter(o => o.signal === 'ARBITRAGE').slice(0, 10);
       
       // Store scan results
-      this.#scanResults = {
+      this.scanResults = {
         scanTime: new Date(),
         duration: Date.now() - startTime,
         tokensScanned: pricedTokens.length,
@@ -3716,12 +3716,12 @@ class RoninTradingBot {
       };
       
       this.notify(`Chain scan complete. Found ${buyOpportunities.length} buy signals, ${sellOpportunities.length} sell signals, and ${arbitrageOpportunities.length} arbitrage opportunities`);
-      return this.#scanResults;
+      return this.scanResults;
     } catch (error) {
       this.notify(`Error scanning chain: ${error.message}`, 'error');
       return null;
     } finally {
-      this.#tokenDiscoveryActive = false;
+      this.tokenDiscoveryActive = false;
     }
   }
   
@@ -3734,7 +3734,7 @@ class RoninTradingBot {
       this.notify('Discovering tokens across Solana...');
       
       // Use Helius API to get top tokens by market cap/volume
-      const url = `https://api.helius.xyz/v0/tokens?api-key=${this.#heliusApiKey}`;
+      const url = `https://api.helius.xyz/v0/tokens?api-key=${this.heliusApiKey}`;
       
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Helius API error: ${response.status}`);
@@ -3744,8 +3744,8 @@ class RoninTradingBot {
       
       // Filter for tokens with sufficient liquidity and volume
       const viableTokens = data.filter(token => {
-        const hasLiquidity = token.marketCap && token.marketCap > this.#minLiquidity;
-        const hasVolume = token.volume24h && token.volume24h > this.#minVolume;
+        const hasLiquidity = token.marketCap && token.marketCap > this.minLiquidity;
+        const hasVolume = token.volume24h && token.volume24h > this.minVolume;
         return hasLiquidity && hasVolume;
       });
       
@@ -3780,11 +3780,11 @@ class RoninTradingBot {
       }
       
       // Limit to maximum tokens to avoid overloading
-      const limitedTokens = allTokens.slice(0, this.#maxScanTokens);
+      const limitedTokens = allTokens.slice(0, this.maxScanTokens);
       
       // Cache these tokens for future reference
       limitedTokens.forEach(token => {
-        this.#discoveredTokens.set(token.address, token);
+        this.discoveredTokens.set(token.address, token);
       });
       
       return limitedTokens;
@@ -3798,7 +3798,7 @@ class RoninTradingBot {
         if (!response.ok) throw new Error(`Jupiter API error: ${response.status}`);
         
         const tokens = await response.json();
-        return tokens.slice(0, this.#maxScanTokens);
+        return tokens.slice(0, this.maxScanTokens);
       } catch (fallbackError) {
         this.log(`Fallback token discovery failed: ${fallbackError.message}`, 'error');
         return [];
@@ -3825,7 +3825,7 @@ class RoninTradingBot {
         const mints = batch.map(t => typeof t === 'string' ? t : t.address);
         
         // Fetch price data for the batch
-        const priceData = await this.#fetchBatchPriceData(mints);
+        const priceData = await this.fetchBatchPriceData(mints);
         
         // Process results
         for (let j = 0; j < batch.length; j++) {
@@ -3836,8 +3836,8 @@ class RoninTradingBot {
           if (data) {
             results.push({
               mint,
-              symbol: typeof token === 'string' ? this.#mintToSymbol(mint) : token.symbol,
-              name: typeof token === 'string' ? this.#mintToSymbol(mint) : token.name || token.symbol,
+              symbol: typeof token === 'string' ? this.mintToSymbol(mint) : token.symbol,
+              name: typeof token === 'string' ? this.mintToSymbol(mint) : token.name || token.symbol,
               price: data.price || 0,
               priceChange24h: data.priceChange24h || 0,
               volume24h: data.volume24h || 0
@@ -3863,7 +3863,7 @@ class RoninTradingBot {
    * @returns {Promise<Map>} Map of mint address to price data
    * @private
    */
-  async #fetchBatchPriceData(mints) {
+  async fetchBatchPriceData(mints) {
     const results = new Map();
     
     try {
@@ -3916,7 +3916,7 @@ class RoninTradingBot {
       if (!token.price || token.price === 0) continue;
       
       // Skip stablecoins
-      if (this.#isStablecoin(token.mint)) continue;
+      if (this.isStablecoin(token.mint)) continue;
       
       let signal = null;
       let score = 0;
@@ -3980,7 +3980,7 @@ class RoninTradingBot {
   async checkForArbitrageOpportunities(tokens) {
     const opportunities = [];
     
-    if (this.#dexConnectors.size < 2) {
+    if (this.dexConnectors.size < 2) {
       await this.initializeDexConnectors();
     }
     
@@ -3989,7 +3989,7 @@ class RoninTradingBot {
         const prices = [];
         
         // Get prices from all connected DEXs
-        for (const [dexName, connector] of this.#dexConnectors.entries()) {
+        for (const [dexName, connector] of this.dexConnectors.entries()) {
           try {
             const price = await connector.getPrice(token.mint);
             prices.push({ dex: dexName, price });
@@ -4038,16 +4038,16 @@ class RoninTradingBot {
   saveDemoFunds() {
     try {
       const demoData = {
-        funds: this.#demoFunds,
-        history: this.#demoTradeHistory,
-        profitLoss: this.#demoProfitLoss,
-        initialValue: this.#demoInitialValue,
+        funds: this.demoFunds,
+        history: this.demoTradeHistory,
+        profitLoss: this.demoProfitLoss,
+        initialValue: this.demoInitialValue,
         lastUpdated: new Date().toISOString()
       };
       
-      this.#queueFileOperation(async () => {
+      this.queueFileOperation(async () => {
         try {
-          const demoStoragePath = path.join(this.#dataDir, 'demo_funds.json');
+          const demoStoragePath = path.join(this.dataDir, 'demo_funds.json');
           const tempPath = `${demoStoragePath}.tmp`;
           await writeFileAsync(tempPath, JSON.stringify(demoData, null, 2));
           await renameAsync(tempPath, demoStoragePath);
@@ -4065,14 +4065,14 @@ class RoninTradingBot {
    */
   loadDemoFunds() {
     try {
-      const demoStoragePath = path.join(this.#dataDir, 'demo_funds.json');
+      const demoStoragePath = path.join(this.dataDir, 'demo_funds.json');
       if (fs.existsSync(demoStoragePath)) {
         const data = JSON.parse(fs.readFileSync(demoStoragePath, 'utf8'));
         
-        this.#demoFunds = data.funds || this.#demoFunds;
-        this.#demoTradeHistory = data.history || [];
-        this.#demoProfitLoss = data.profitLoss || 0;
-        this.#demoInitialValue = data.initialValue || 0;
+        this.demoFunds = data.funds || this.demoFunds;
+        this.demoTradeHistory = data.history || [];
+        this.demoProfitLoss = data.profitLoss || 0;
+        this.demoInitialValue = data.initialValue || 0;
         
         this.log('Demo funds loaded from storage', 'debug');
       } else {
@@ -4087,21 +4087,21 @@ class RoninTradingBot {
    * Reset demo funds to default values
    */
   resetDemoFunds() {
-    this.#demoFunds = {
-      [this.#tokenRegistry.USDC]: 1000,
-      [this.#tokenRegistry.SOL]: 3,
-      [this.#tokenRegistry.BONK]: 50000000,
-      [this.#tokenRegistry.MSOL]: 1,
-      [this.#tokenRegistry.SAMO]: 1000,
-      [this.#tokenRegistry.JUP]: 100
+    this.demoFunds = {
+      [this.tokenRegistry.USDC]: 1000,
+      [this.tokenRegistry.SOL]: 3,
+      [this.tokenRegistry.BONK]: 50000000,
+      [this.tokenRegistry.MSOL]: 1,
+      [this.tokenRegistry.SAMO]: 1000,
+      [this.tokenRegistry.JUP]: 100
     };
     
-    this.#demoTradeHistory = [];
-    this.#demoProfitLoss = 0;
-    this.#demoInitialValue = 0;
+    this.demoTradeHistory = [];
+    this.demoProfitLoss = 0;
+    this.demoInitialValue = 0;
     
     this.calculateDemoPortfolioValue().then(value => {
-      this.#demoInitialValue = value;
+      this.demoInitialValue = value;
       this.notify(`Demo funds reset. New portfolio value: $${value.toFixed(2)}`);
       this.saveDemoFunds();
     });
@@ -4112,24 +4112,24 @@ class RoninTradingBot {
    * @param {boolean} enabled Whether to enable demo mode
    */
   enableDemoMode(enabled = true) {
-    this.#demoMode = enabled;
+    this.demoMode = enabled;
     
     if (enabled) {
       this.notify('Demo mode enabled - using virtual funds');
       this.loadDemoFunds();
       
       // Calculate initial portfolio value for P&L tracking
-      if (this.#demoInitialValue === 0) {
+      if (this.demoInitialValue === 0) {
         this.calculateDemoPortfolioValue().then(value => {
-          this.#demoInitialValue = value;
-          this.notify(`Initial demo portfolio value: $${this.#demoInitialValue.toFixed(2)}`);
+          this.demoInitialValue = value;
+          this.notify(`Initial demo portfolio value: $${this.demoInitialValue.toFixed(2)}`);
         });
       }
     } else {
       this.notify('Demo mode disabled - using real balances');
     }
     
-    return this.#demoMode;
+    return this.demoMode;
   }
   
   /**
@@ -4138,12 +4138,12 @@ class RoninTradingBot {
    */
   loadSavedWallets() {
     try {
-      const walletsFile = path.join(this.#dataDir, 'saved_wallets.json');
+      const walletsFile = path.join(this.dataDir, 'saved_wallets.json');
       if (fs.existsSync(walletsFile)) {
-        this.#savedWallets = JSON.parse(fs.readFileSync(walletsFile, 'utf8'));
-        this.log(`Loaded ${Object.keys(this.#savedWallets).length} saved wallet configurations`);
+        this.savedWallets = JSON.parse(fs.readFileSync(walletsFile, 'utf8'));
+        this.log(`Loaded ${Object.keys(this.savedWallets).length} saved wallet configurations`);
       }
-      return this.#savedWallets;
+      return this.savedWallets;
     } catch (error) {
       this.log(`Error loading saved wallets: ${error.message}`, 'error');
       return {};
@@ -4156,17 +4156,17 @@ class RoninTradingBot {
    */
   getStatus() {
     return {
-      isRunning: this.#isRunning,
-      simulationMode: this.#simulationMode,
-      demoMode: this.#demoMode,
-      walletConnected: !!this.#wallet,
-      walletAddress: this.#walletAddress,
-      walletType: this.#walletType,
-      currentBalanceUsd: this.#currentPortfolioValue,
-      successfulTrades: this.#successfulTrades,
-      failedTrades: this.#failedTrades,
-      totalTrades: this.#successfulTrades + this.#failedTrades,
-      profitLoss: this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss
+      isRunning: this.isRunning,
+      simulationMode: this.simulationMode,
+      demoMode: this.demoMode,
+      walletConnected: !!this.wallet,
+      walletAddress: this.walletAddress,
+      walletType: this.walletType,
+      currentBalanceUsd: this.currentPortfolioValue,
+      successfulTrades: this.successfulTrades,
+      failedTrades: this.failedTrades,
+      totalTrades: this.successfulTrades + this.failedTrades,
+      profitLoss: this.demoMode ? this.demoProfitLoss : this.totalProfitLoss
     };
   }
 }

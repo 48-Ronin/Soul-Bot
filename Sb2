@@ -12,65 +12,65 @@ const bs58 = require('bs58');
  */
 class RoninTradingBot {
   // Core configuration
-  #connection;
-  #wallet;
-  #heliusApiKey = '8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
-  #heliusRpc = 'https://staked.helius-rpc.com?api-key=8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
-  #jupiterApiUrl = 'https://quote-api.jup.ag/v6';
+  connection;
+  wallet;
+  heliusApiKey = '8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
+  heliusRpc = 'https://staked.helius-rpc.com?api-key=8d7f2c65-f029-45c5-9aa8-de2dfb41078f';
+  jupiterApiUrl = 'https://quote-api.jup.ag/v6';
   
   // Bot state
-  #isRunning = false;
-  #isTradeInProgress = false;
-  #simulationMode = false;
-  #initialInvestment = 0;
-  #lastBalanceCheck = 0;
-  #currentPortfolioValue = 0;
-  #notificationHandlers = [];
+  isRunning = false;
+  isTradeInProgress = false;
+  simulationMode = false;
+  initialInvestment = 0;
+  lastBalanceCheck = 0;
+  currentPortfolioValue = 0;
+  notificationHandlers = [];
   
   // Wallet information
-  #walletType = 'privateKey';
-  #walletAddress = null;
-  #savedWallets = {};
+  walletType = 'privateKey';
+  walletAddress = null;
+  savedWallets = {};
   
   // Demo mode
-  #demoMode = false;
-  #demoFunds = {};
-  #demoTradeHistory = [];
-  #demoProfitLoss = 0;
-  #demoInitialValue = 0;
+  demoMode = false;
+  demoFunds = {};
+  demoTradeHistory = [];
+  demoProfitLoss = 0;
+  demoInitialValue = 0;
   
   // Risk management
-  #maxRiskPercentage = 15; // 15% of total balance per trade
-  #drawdownProtection = 50; // Stop if 50% of initial investment is lost
+  maxRiskPercentage = 15; // 15% of total balance per trade
+  drawdownProtection = 50; // Stop if 50% of initial investment is lost
   
   // Trade tracking
-  #successfulTrades = 0;
-  #failedTrades = 0;
-  #totalProfitLoss = 0;
-  #tradeHistory = [];
+  successfulTrades = 0;
+  failedTrades = 0;
+  totalProfitLoss = 0;
+  tradeHistory = [];
   
   // Strategy parameters
-  #marketMakingActive = false;
-  #arbitrageActive = false; 
-  #liquidityMiningActive = false;
-  #tokenDiscoveryActive = false;
-  #spreadPercentage = 1.0; 
-  #minArbitrageProfit = 0.5;
-  #liquidityPositions = [];
-  #tokenMovements = new Map();
+  marketMakingActive = false;
+  arbitrageActive = false; 
+  liquidityMiningActive = false;
+  tokenDiscoveryActive = false;
+  spreadPercentage = 1.0; 
+  minArbitrageProfit = 0.5;
+  liquidityPositions = [];
+  tokenMovements = new Map();
   
   // Scanning parameters
-  #discoveredTokens = new Map();
-  #scanDuration = 120000; // 2 minute minimum scan time
-  #minLiquidity = 50000; // $50K minimum liquidity
-  #minVolume = 10000; // $10K minimum 24h volume
-  #maxScanTokens = 1000; // Maximum tokens to scan
-  #scanResults = null;
-  #opportunityScoreThreshold = 35;
-  #multiDexScan = true;
+  discoveredTokens = new Map();
+  scanDuration = 120000; // 2 minute minimum scan time
+  minLiquidity = 50000; // $50K minimum liquidity
+  minVolume = 10000; // $10K minimum 24h volume
+  maxScanTokens = 1000; // Maximum tokens to scan
+  scanResults = null;
+  opportunityScoreThreshold = 35;
+  multiDexScan = true;
   
   // Token registry for common tokens
-  #tokenRegistry = {
+  tokenRegistry = {
     'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     'SOL': 'So11111111111111111111111111111111111111112',
     'BONK': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
@@ -81,7 +81,7 @@ class RoninTradingBot {
   };
   
   // Token-specific slippage settings
-  #tokenSlippage = {
+  tokenSlippage = {
     'SOL': 1.0,
     'BONK': 3.0,
     'MSOL': 0.8,
@@ -92,21 +92,21 @@ class RoninTradingBot {
   };
   
   // DEX connectors
-  #dexConnectors = new Map();
-  #supportedDexs = ['jupiter', 'raydium', 'orca'];
+  dexConnectors = new Map();
+  supportedDexs = ['jupiter', 'raydium', 'orca'];
   
   // Caches for performance
-  #tokenDecimalCache = new Map();
-  #tokenPriceCache = new Map();
-  #priceCacheTTL = 30 * 1000; // 30 seconds
+  tokenDecimalCache = new Map();
+  tokenPriceCache = new Map();
+  priceCacheTTL = 30 * 1000; // 30 seconds
   
   // Rate limiting
-  #premiumApiLastUsed = 0;
-  #premiumApiInterval = 60 * 60 * 1000; // 1 hour in milliseconds
+  premiumApiLastUsed = 0;
+  premiumApiInterval = 60 * 60 * 1000; // 1 hour in milliseconds
   
   // Logs directory
-  #logsDir;
-  #dataDir;
+  logsDir;
+  dataDir;
   
   /**
    * Create a new Ronin Trading Bot
@@ -114,45 +114,45 @@ class RoninTradingBot {
    */
   constructor(config = {}) {
     // Set up logs directory
-    this.#dataDir = config.dataDir || path.join(os.homedir(), '.ronin-bot');
-    this.#logsDir = path.join(this.#dataDir, 'logs');
+    this.dataDir = config.dataDir || path.join(os.homedir(), '.ronin-bot');
+    this.logsDir = path.join(this.dataDir, 'logs');
     
-    if (!fs.existsSync(this.#logsDir)) {
-      fs.mkdirSync(this.#logsDir, { recursive: true });
+    if (!fs.existsSync(this.logsDir)) {
+      fs.mkdirSync(this.logsDir, { recursive: true });
     }
     
     // Set default demo funds
-    this.#demoFunds = {
-      [this.#tokenRegistry.USDC]: 1000,
-      [this.#tokenRegistry.SOL]: 3,
-      [this.#tokenRegistry.BONK]: 50000000,
-      [this.#tokenRegistry.MSOL]: 1,
-      [this.#tokenRegistry.SAMO]: 1000,
-      [this.#tokenRegistry.JUP]: 100
+    this.demoFunds = {
+      [this.tokenRegistry.USDC]: 1000,
+      [this.tokenRegistry.SOL]: 3,
+      [this.tokenRegistry.BONK]: 50000000,
+      [this.tokenRegistry.MSOL]: 1,
+      [this.tokenRegistry.SAMO]: 1000,
+      [this.tokenRegistry.JUP]: 100
     };
     
     // Override API key if provided
     if (config.heliusApiKey) {
-      this.#heliusApiKey = config.heliusApiKey;
-      this.#heliusRpc = `https://staked.helius-rpc.com?api-key=${this.#heliusApiKey}`;
+      this.heliusApiKey = config.heliusApiKey;
+      this.heliusRpc = `https://staked.helius-rpc.com?api-key=${this.heliusApiKey}`;
     }
     
     // Initialize direct connection to Helius RPC
-    this.#connection = new Connection(this.#heliusRpc, {
+    this.connection = new Connection(this.heliusRpc, {
       commitment: 'confirmed',
       confirmTransactionInitialTimeout: 60000,
     });
     
     // Set simulation mode
-    this.#simulationMode = config.simulationMode === true;
+    this.simulationMode = config.simulationMode === true;
     
     // Configure risk parameters
     if (config.maxRiskPercentage) {
-      this.#maxRiskPercentage = parseFloat(config.maxRiskPercentage);
+      this.maxRiskPercentage = parseFloat(config.maxRiskPercentage);
     }
     
     if (config.drawdownProtection) {
-      this.#drawdownProtection = parseFloat(config.drawdownProtection);
+      this.drawdownProtection = parseFloat(config.drawdownProtection);
     }
     
     // Load private key if provided
@@ -169,9 +169,9 @@ class RoninTradingBot {
     // Initialize DEX connectors
     this.initializeDexConnectors();
     
-    this.log(`Bot initialized. Helius RPC: ${this.#heliusRpc}`);
-    this.log(`Mode: ${this.#simulationMode ? 'SIMULATION' : 'LIVE TRADING'}`);
-    this.log(`Risk parameters: ${this.#maxRiskPercentage}% max risk, ${this.#drawdownProtection}% drawdown protection`);
+    this.log(`Bot initialized. Helius RPC: ${this.heliusRpc}`);
+    this.log(`Mode: ${this.simulationMode ? 'SIMULATION' : 'LIVE TRADING'}`);
+    this.log(`Risk parameters: ${this.maxRiskPercentage}% max risk, ${this.drawdownProtection}% drawdown protection`);
   }
   
   /**
@@ -207,12 +207,12 @@ class RoninTradingBot {
         }
       }
 
-      this.#wallet = Keypair.fromSecretKey(
+      this.wallet = Keypair.fromSecretKey(
         Array.isArray(privateKeyData) ? Uint8Array.from(privateKeyData) : privateKeyData
       );
       
-      this.#walletAddress = this.#wallet.publicKey.toString();
-      this.log(`Wallet loaded: ${this.#walletAddress}`);
+      this.walletAddress = this.wallet.publicKey.toString();
+      this.log(`Wallet loaded: ${this.walletAddress}`);
     } catch (error) {
       this.log(`Error loading wallet: ${error.message}`, 'error');
     }
@@ -225,7 +225,7 @@ class RoninTradingBot {
     this.log('Initializing DEX connectors');
     
     // Jupiter connector (already using this)
-    this.#dexConnectors.set('jupiter', {
+    this.dexConnectors.set('jupiter', {
       name: 'Jupiter',
       getPrice: async (mint) => {
         return await this.getTokenPrice(mint);
@@ -239,7 +239,7 @@ class RoninTradingBot {
     });
     
     // Raydium connector
-    this.#dexConnectors.set('raydium', {
+    this.dexConnectors.set('raydium', {
       name: 'Raydium',
       getPrice: async (mint) => {
         try {
@@ -267,7 +267,7 @@ class RoninTradingBot {
     });
     
     // Orca connector
-    this.#dexConnectors.set('orca', {
+    this.dexConnectors.set('orca', {
       name: 'Orca',
       getPrice: async (mint) => {
         try {
@@ -281,7 +281,7 @@ class RoninTradingBot {
       }
     });
     
-    this.notify(`Initialized connectors for ${this.#dexConnectors.size} DEXs`);
+    this.notify(`Initialized connectors for ${this.dexConnectors.size} DEXs`);
   }
   
   /**
@@ -296,7 +296,7 @@ class RoninTradingBot {
     
     // Write to log file
     try {
-      const logFile = path.join(this.#logsDir, `bot-${new Date().toISOString().split('T')[0]}.log`);
+      const logFile = path.join(this.logsDir, `bot-${new Date().toISOString().split('T')[0]}.log`);
       fs.appendFileSync(logFile, formattedMessage + '\n');
     } catch (e) {
       console.error('Failed to write to log file:', e);
@@ -310,8 +310,8 @@ class RoninTradingBot {
    */
   notify(message, level = 'info') {
     this.log(message, level);
-    if (this.#notificationHandlers) {
-      this.#notificationHandlers.forEach(handler => {
+    if (this.notificationHandlers) {
+      this.notificationHandlers.forEach(handler => {
         try {
           handler(message, level);
         } catch (error) {
@@ -327,7 +327,7 @@ class RoninTradingBot {
    */
   addNotificationHandler(handler) {
     if (typeof handler === 'function') {
-      this.#notificationHandlers.push(handler);
+      this.notificationHandlers.push(handler);
     }
   }
   
@@ -335,19 +335,19 @@ class RoninTradingBot {
    * Start the trading bot
    */
   async start() {
-    if (this.#isRunning) {
+    if (this.isRunning) {
       this.log('Bot is already running', 'warn');
       return false;
     }
     
     try {
-      this.#isRunning = true;
+      this.isRunning = true;
       this.notify('Starting Ronin trading bot...');
       
       // Check if wallet is connected
-      if (!this.#wallet && !this.#demoMode) {
+      if (!this.wallet && !this.demoMode) {
         this.notify('No wallet connected. Please connect a wallet or enable demo mode.', 'warn');
-        this.#isRunning = false;
+        this.isRunning = false;
         return false;
       }
       
@@ -355,18 +355,18 @@ class RoninTradingBot {
       await this.runDiagnostics();
       
       // Get initial balance for drawdown protection
-      this.#initialInvestment = this.#demoMode ? 
+      this.initialInvestment = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
       
-      this.notify(`Initial portfolio value: $${this.#initialInvestment.toFixed(2)}`);
+      this.notify(`Initial portfolio value: $${this.initialInvestment.toFixed(2)}`);
       
       // Run the trading loop
       this.runTradingLoop();
       
       return true;
     } catch (error) {
-      this.#isRunning = false;
+      this.isRunning = false;
       this.notify(`Error starting bot: ${error.message}`, 'error');
       return false;
     }
@@ -376,14 +376,14 @@ class RoninTradingBot {
    * Stop the trading bot
    */
   stop() {
-    if (!this.#isRunning) {
+    if (!this.isRunning) {
       this.log('Bot is not running', 'warn');
       return false;
     }
     
-    this.#isRunning = false;
+    this.isRunning = false;
     this.notify('Stopping bot...');
-    this.notify(`Bot stopped. Final stats: ${this.#successfulTrades} successful trades, ${this.#failedTrades} failed trades, $${this.#totalProfitLoss.toFixed(2)} P&L`);
+    this.notify(`Bot stopped. Final stats: ${this.successfulTrades} successful trades, ${this.failedTrades} failed trades, $${this.totalProfitLoss.toFixed(2)} P&L`);
     return true;
   }
   
@@ -395,7 +395,7 @@ class RoninTradingBot {
     
     // Test RPC connection
     try {
-      const version = await this.#connection.getVersion();
+      const version = await this.connection.getVersion();
       this.notify(`RPC connection successful. Solana version: ${version['solana-core']}`);
     } catch (error) {
       this.notify(`RPC connection failed: ${error.message}`, 'error');
@@ -403,16 +403,16 @@ class RoninTradingBot {
     }
     
     // Check wallet if not in demo mode
-    if (!this.#demoMode) {
+    if (!this.demoMode) {
       try {
-        const solBalance = await this.getTokenBalance(this.#tokenRegistry.SOL);
+        const solBalance = await this.getTokenBalance(this.tokenRegistry.SOL);
         this.notify(`SOL balance: ${solBalance}`);
         if (solBalance < 0.01) {
           this.notify('WARNING: Low SOL balance may cause transaction failures', 'warn');
         }
       } catch (error) {
         this.notify(`Balance check failed: ${error.message}`, 'error');
-        if (!this.#demoMode) {
+        if (!this.demoMode) {
           throw new Error(`Balance check failed: ${error.message}`);
         }
       }
@@ -420,8 +420,8 @@ class RoninTradingBot {
     
     // Test Jupiter API
     try {
-      const fromMint = this.#tokenRegistry.SOL;
-      const toMint = this.#tokenRegistry.USDC;
+      const fromMint = this.tokenRegistry.SOL;
+      const toMint = this.tokenRegistry.USDC;
       // Just get a quote, don't execute
       const quote = await this.getJupiterQuote(fromMint, toMint, 0.001, 100);
       if (quote) {
@@ -442,15 +442,15 @@ class RoninTradingBot {
    * Main trading loop
    */
   async runTradingLoop() {
-    while (this.#isRunning) {
+    while (this.isRunning) {
       try {
         // Check for drawdown protection
-        const currentValue = this.#demoMode ? 
+        const currentValue = this.demoMode ? 
           await this.calculateDemoPortfolioValue() : 
           await this.calculatePortfolioValue();
           
-        if (currentValue < this.#initialInvestment * (1 - this.#drawdownProtection / 100)) {
-          this.notify(`EMERGENCY STOP: Drawdown protection triggered. Portfolio value ($${currentValue.toFixed(2)}) is below ${this.#drawdownProtection}% of initial investment ($${this.#initialInvestment.toFixed(2)})`, 'error');
+        if (currentValue < this.initialInvestment * (1 - this.drawdownProtection / 100)) {
+          this.notify(`EMERGENCY STOP: Drawdown protection triggered. Portfolio value ($${currentValue.toFixed(2)}) is below ${this.drawdownProtection}% of initial investment ($${this.initialInvestment.toFixed(2)})`, 'error');
           this.stop();
           break;
         }
@@ -488,26 +488,26 @@ class RoninTradingBot {
    * Run a small test trade to verify functionality
    */
   async testTrade() {
-    if (this.#isTradeInProgress) {
+    if (this.isTradeInProgress) {
       this.notify('Another trade is in progress, skipping test trade', 'warn');
       return false;
     }
     
-    this.#isTradeInProgress = true;
+    this.isTradeInProgress = true;
     this.notify('Executing test trade...');
     
     try {
       // Use a very small amount for the test trade
-      const fromMint = this.#tokenRegistry.USDC;
-      const toMint = this.#tokenRegistry.SOL;
+      const fromMint = this.tokenRegistry.USDC;
+      const toMint = this.tokenRegistry.SOL;
       let amount = 0.1; // Small amount for testing
       
       // Check if we have enough USDC
       const usdcBalance = await this.getTokenBalance(fromMint);
       if (usdcBalance < amount) {
         // If not enough USDC, try the reverse direction
-        const fromMintAlt = this.#tokenRegistry.SOL;
-        const toMintAlt = this.#tokenRegistry.USDC;
+        const fromMintAlt = this.tokenRegistry.SOL;
+        const toMintAlt = this.tokenRegistry.USDC;
         const solBalance = await this.getTokenBalance(fromMintAlt);
         
         if (solBalance > 0.001) {
@@ -528,7 +528,7 @@ class RoninTradingBot {
       this.notify(`Test trade failed: ${error.message}`, 'error');
       return false;
     } finally {
-      this.#isTradeInProgress = false;
+      this.isTradeInProgress = false;
     }
   }
   
@@ -536,12 +536,12 @@ class RoninTradingBot {
    * Find and execute swing trading opportunities
    */
   async findAndExecuteSwingOpportunities() {
-    if (this.#isTradeInProgress) {
+    if (this.isTradeInProgress) {
       this.log('Trade already in progress, skipping opportunity search', 'debug');
       return;
     }
     
-    this.#isTradeInProgress = true;
+    this.isTradeInProgress = true;
     
     try {
       this.notify('Searching for swing trading opportunities...');
@@ -562,12 +562,12 @@ class RoninTradingBot {
       }
       
       // Get total portfolio value
-      const portfolioValue = this.#demoMode ? 
+      const portfolioValue = this.demoMode ? 
         await this.calculateDemoPortfolioValue() : 
         await this.calculatePortfolioValue();
       
       // Calculate maximum risk amount (15% of portfolio)
-      const maxRiskAmount = portfolioValue * (this.#maxRiskPercentage / 100);
+      const maxRiskAmount = portfolioValue * (this.maxRiskPercentage / 100);
       
       // Take the best opportunity
       const bestOpportunity = opportunities[0];
@@ -577,8 +577,8 @@ class RoninTradingBot {
       if (bestOpportunity.type === 'BUY') {
         // Calculate position size
         const targetToken = bestOpportunity.symbol;
-        const targetMint = this.#tokenRegistry[targetToken];
-        const fromMint = this.#tokenRegistry.USDC;
+        const targetMint = this.tokenRegistry[targetToken];
+        const fromMint = this.tokenRegistry.USDC;
         
         // Calculate trade size (in USDC)
         const tradeSize = Math.min(maxRiskAmount, bestOpportunity.maxSize || maxRiskAmount);
@@ -588,8 +588,8 @@ class RoninTradingBot {
       } else if (bestOpportunity.type === 'SELL') {
         // For sell, we need to calculate how much of the token to sell
         const sourceToken = bestOpportunity.symbol;
-        const fromMint = this.#tokenRegistry[sourceToken];
-        const toMint = this.#tokenRegistry.USDC;
+        const fromMint = this.tokenRegistry[sourceToken];
+        const toMint = this.tokenRegistry.USDC;
         
         // Get token balance
         const tokenBalance = await this.getTokenBalance(fromMint);
@@ -610,7 +610,7 @@ class RoninTradingBot {
     } catch (error) {
       this.notify(`Error finding swing opportunities: ${error.message}`, 'error');
     } finally {
-      this.#isTradeInProgress = false;
+      this.isTradeInProgress = false;
     }
   }
   
@@ -625,7 +625,7 @@ class RoninTradingBot {
     // Process each token
     for (const [mint, data] of priceData.entries()) {
       // Find symbol for the mint
-      const symbol = Object.keys(this.#tokenRegistry).find(key => this.#tokenRegistry[key] === mint);
+      const symbol = Object.keys(this.tokenRegistry).find(key => this.tokenRegistry[key] === mint);
       if (!symbol) continue;
       
       // Skip stablecoins for buying
@@ -694,12 +694,12 @@ class RoninTradingBot {
    * Continuously place and update buy/sell orders to profit from spread
    */
   async runMarketMakingStrategy() {
-    if (this.#marketMakingActive) {
+    if (this.marketMakingActive) {
       this.log('Market making already running', 'debug');
       return;
     }
     
-    this.#marketMakingActive = true;
+    this.marketMakingActive = true;
     this.notify('Starting market making strategy');
     
     try {
@@ -711,25 +711,25 @@ class RoninTradingBot {
       const prices = {};
       
       for (const token of tokens) {
-        const mint = this.#tokenRegistry[token];
+        const mint = this.tokenRegistry[token];
         balances[token] = await this.getTokenBalance(mint);
         prices[token] = await this.getTokenPrice(mint);
       }
       
       // Get USDC balance (for buys)
-      const usdcBalance = await this.getTokenBalance(this.#tokenRegistry.USDC);
+      const usdcBalance = await this.getTokenBalance(this.tokenRegistry.USDC);
       
       this.notify(`Market making for: ${tokens.join(', ')}`);
       
       // For each token, place buy and sell orders
       for (const token of tokens) {
-        const mint = this.#tokenRegistry[token];
+        const mint = this.tokenRegistry[token];
         const currentPrice = prices[token];
         const tokenBalance = balances[token];
         
         // Calculate buy and sell prices based on spread
-        const buyPrice = currentPrice * (1 - this.#spreadPercentage / 100);
-        const sellPrice = currentPrice * (1 + this.#spreadPercentage / 100);
+        const buyPrice = currentPrice * (1 - this.spreadPercentage / 100);
+        const sellPrice = currentPrice * (1 + this.spreadPercentage / 100);
         
         this.log(`${token} - Current: $${currentPrice}, Buy: $${buyPrice}, Sell: $${sellPrice}`, 'debug');
         
@@ -740,7 +740,7 @@ class RoninTradingBot {
         // For sell, use 15% of token balance
         const sellSize = tokenBalance * 0.15;
         
-        if (this.#demoMode || this.#simulationMode) {
+        if (this.demoMode || this.simulationMode) {
           this.notify(`[SIMULATION] Market making ${token} - Buy: ${buySize.toFixed(6)} @ $${buyPrice.toFixed(6)}, Sell: ${sellSize.toFixed(6)} @ $${sellPrice.toFixed(6)}`);
         } else {
           // Place limit buy order (would need exchange-specific implementation)
@@ -753,7 +753,7 @@ class RoninTradingBot {
     } catch (error) {
       this.notify(`Market making error: ${error.message}`, 'error');
     } finally {
-      this.#marketMakingActive = false;
+      this.marketMakingActive = false;
     }
   }
   
@@ -762,12 +762,12 @@ class RoninTradingBot {
    * Exploits price differences between different Solana DEXs
    */
   async runArbitrageStrategy() {
-    if (this.#arbitrageActive) {
+    if (this.arbitrageActive) {
       this.log('Arbitrage strategy already running', 'debug');
       return;
     }
     
-    this.#arbitrageActive = true;
+    this.arbitrageActive = true;
     this.notify('Starting cross-DEX arbitrage strategy');
     
     try {
@@ -788,7 +788,7 @@ class RoninTradingBot {
     } catch (error) {
       this.notify(`Arbitrage error: ${error.message}`, 'error');
     } finally {
-      this.#arbitrageActive = false;
+      this.arbitrageActive = false;
     }
   }
   
@@ -797,7 +797,7 @@ class RoninTradingBot {
    * @returns {Array} Arbitrage opportunities
    */
   async findArbitrageOpportunities() {
-    if (this.#dexConnectors.size < 2) {
+    if (this.dexConnectors.size < 2) {
       await this.initializeDexConnectors();
     }
     
@@ -805,11 +805,11 @@ class RoninTradingBot {
     const tokens = ['SOL', 'BONK', 'JUP', 'SAMO', 'MSOL'];
     
     for (const token of tokens) {
-      const mint = this.#tokenRegistry[token];
+      const mint = this.tokenRegistry[token];
       const prices = [];
       
       // Get prices from all DEXs
-      for (const [dexName, connector] of this.#dexConnectors.entries()) {
+      for (const [dexName, connector] of this.dexConnectors.entries()) {
         try {
           const price = await connector.getPrice(mint);
           prices.push({ dex: dexName, price });
@@ -828,7 +828,7 @@ class RoninTradingBot {
       // Calculate profit potential
       const profitPercent = ((mostExpensive.price - cheapest.price) / cheapest.price) * 100;
       
-      if (profitPercent > this.#minArbitrageProfit) {
+      if (profitPercent > this.minArbitrageProfit) {
         opportunities.push({
           token,
           mint,
@@ -854,10 +854,10 @@ class RoninTradingBot {
   async executeArbitrage(opportunity) {
     this.notify(`Executing arbitrage: Buy ${opportunity.token} at $${opportunity.buyPrice.toFixed(6)} on ${opportunity.buyDex}, sell at $${opportunity.sellPrice.toFixed(6)} on ${opportunity.sellDex}`);
     
-    if (this.#demoMode || this.#simulationMode) {
+    if (this.demoMode || this.simulationMode) {
       // Demo mode arbitrage
-      const buyDex = this.#dexConnectors.get(opportunity.buyDex);
-      const sellDex = this.#dexConnectors.get(opportunity.sellDex);
+      const buyDex = this.dexConnectors.get(opportunity.buyDex);
+      const sellDex = this.dexConnectors.get(opportunity.sellDex);
       
       if (!buyDex || !sellDex) {
         this.log(`DEX connector not found`, 'error');
@@ -865,7 +865,7 @@ class RoninTradingBot {
       }
       
       // Calculate trade size (risk 10% of USDC balance)
-      const usdcBalance = await this.getTokenBalance(this.#tokenRegistry.USDC);
+      const usdcBalance = await this.getTokenBalance(this.tokenRegistry.USDC);
       const tradeSize = usdcBalance * 0.1;
       
       // Simulate the trades
@@ -876,8 +876,8 @@ class RoninTradingBot {
       this.notify(`[DEMO] Arbitrage result: Spent $${tradeSize.toFixed(2)}, received $${sellProceeds.toFixed(2)}, profit: $${profitUsd.toFixed(2)}`);
       
       // Record a demo trade
-      if (this.#demoMode) {
-        const fromMint = this.#tokenRegistry.USDC;
+      if (this.demoMode) {
+        const fromMint = this.tokenRegistry.USDC;
         const toMint = opportunity.mint;
         
         // First trade - buy on cheaper DEX
@@ -916,12 +916,12 @@ class RoninTradingBot {
    * Provides liquidity to DEX pools to earn fees
    */
   async runLiquidityMiningStrategy() {
-    if (this.#liquidityMiningActive) {
+    if (this.liquidityMiningActive) {
       this.log('Liquidity mining already running', 'debug');
       return;
     }
     
-    this.#liquidityMiningActive = true;
+    this.liquidityMiningActive = true;
     this.notify('Starting liquidity mining strategy');
     
     try {
@@ -944,7 +944,7 @@ class RoninTradingBot {
     } catch (error) {
       this.notify(`Liquidity mining error: ${error.message}`, 'error');
     } finally {
-      this.#liquidityMiningActive = false;
+      this.liquidityMiningActive = false;
     }
   }
   
@@ -953,14 +953,14 @@ class RoninTradingBot {
    * @returns {Promise<Array>} Liquidity mining opportunities
    */
   async findLiquidityMiningOpportunities() {
-    if (this.#dexConnectors.size < 2) {
+    if (this.dexConnectors.size < 2) {
       await this.initializeDexConnectors();
     }
     
     const opportunities = [];
     
     // Get liquidity pools from all DEXs
-    for (const [dexName, connector] of this.#dexConnectors.entries()) {
+    for (const [dexName, connector] of this.dexConnectors.entries()) {
       if (connector.getLiquidityPools) {
         try {
           const pools = await connector.getLiquidityPools();
@@ -990,11 +990,11 @@ class RoninTradingBot {
   async addLiquidity(opportunity) {
     this.notify(`Adding liquidity to ${opportunity.name} pool on ${opportunity.dex} (${opportunity.apy}% APY)`);
     
-    if (this.#demoMode || this.#simulationMode) {
+    if (this.demoMode || this.simulationMode) {
       // Parse token symbols
       const [token1Symbol, token2Symbol] = opportunity.name.split('-');
-      const token1Mint = this.#tokenRegistry[token1Symbol];
-      const token2Mint = this.#tokenRegistry[token2Symbol];
+      const token1Mint = this.tokenRegistry[token1Symbol];
+      const token2Mint = this.tokenRegistry[token2Symbol];
       
       if (!token1Mint || !token2Mint) {
         this.log(`Unknown tokens in pool ${opportunity.name}`, 'error');
@@ -1012,7 +1012,7 @@ class RoninTradingBot {
       this.notify(`[DEMO] Adding ${token1Amount.toFixed(6)} ${token1Symbol} and ${token2Amount.toFixed(6)} ${token2Symbol} to ${opportunity.dex} liquidity pool`);
       
       // Track the position
-      this.#liquidityPositions.push({
+      this.liquidityPositions.push({
         pair: opportunity.name,
         dex: opportunity.dex,
         token1: token1Symbol, 
@@ -1025,9 +1025,9 @@ class RoninTradingBot {
       });
       
       // Update demo balances
-      if (this.#demoMode) {
-        this.#demoFunds[token1Mint] -= token1Amount;
-        this.#demoFunds[token2Mint] -= token2Amount;
+      if (this.demoMode) {
+        this.demoFunds[token1Mint] -= token1Amount;
+        this.demoFunds[token2Mint] -= token2Amount;
         this.saveDemoFunds();
       }
       
@@ -1043,14 +1043,14 @@ class RoninTradingBot {
    * Check and harvest liquidity mining rewards
    */
   async harvestLiquidityRewards() {
-    if (this.#liquidityPositions.length === 0) {
+    if (this.liquidityPositions.length === 0) {
       this.log('No active liquidity positions', 'debug');
       return;
     }
     
-    this.notify(`Checking rewards for ${this.#liquidityPositions.length} liquidity positions`);
+    this.notify(`Checking rewards for ${this.liquidityPositions.length} liquidity positions`);
     
-    for (const position of this.#liquidityPositions) {
+    for (const position of this.liquidityPositions) {
       try {
         // Calculate time in pool
         const now = new Date();
@@ -1062,8 +1062,8 @@ class RoninTradingBot {
         const dailyRate = annualRate / 365;
         
         // Calculate token values
-        const token1Mint = this.#tokenRegistry[position.token1];
-        const token2Mint = this.#tokenRegistry[position.token2];
+        const token1Mint = this.tokenRegistry[position.token1];
+        const token2Mint = this.tokenRegistry[position.token2];
         const token1Price = await this.getTokenPrice(token1Mint);
         const token2Price = await this.getTokenPrice(token2Mint);
         
@@ -1073,8 +1073,8 @@ class RoninTradingBot {
         this.notify(`Liquidity position ${position.pair} on ${position.dex} - Fees earned: $${feesEarnedUsd.toFixed(2)} (${durationDays.toFixed(1)} days)`);
         
         // In demo mode, add the rewards to USDC balance
-        if (this.#demoMode && feesEarnedUsd > 0.01) {
-          this.#demoFunds[this.#tokenRegistry.USDC] += feesEarnedUsd;
+        if (this.demoMode && feesEarnedUsd > 0.01) {
+          this.demoFunds[this.tokenRegistry.USDC] += feesEarnedUsd;
           this.saveDemoFunds();
         }
       } catch (error) {
@@ -1088,7 +1088,7 @@ class RoninTradingBot {
    * @returns {Array} Active liquidity positions
    */
   getLiquidityPositions() {
-    return this.#liquidityPositions;
+    return this.liquidityPositions;
   }
   
   /**
@@ -1097,10 +1097,10 @@ class RoninTradingBot {
    */
   configureMarketMaking(config = {}) {
     if (config.spreadPercentage !== undefined) {
-      this.#spreadPercentage = parseFloat(config.spreadPercentage);
+      this.spreadPercentage = parseFloat(config.spreadPercentage);
     }
     
-    this.notify(`Market making configured with ${this.#spreadPercentage}% spread`);
+    this.notify(`Market making configured with ${this.spreadPercentage}% spread`);
   }
   
   /**
@@ -1109,10 +1109,10 @@ class RoninTradingBot {
    */
   configureArbitrage(config = {}) {
     if (config.minProfitPercent !== undefined) {
-      this.#minArbitrageProfit = parseFloat(config.minProfitPercent);
+      this.minArbitrageProfit = parseFloat(config.minProfitPercent);
     }
     
-    this.notify(`Arbitrage configured with ${this.#minArbitrageProfit}% minimum profit`);
+    this.notify(`Arbitrage configured with ${this.minArbitrageProfit}% minimum profit`);
   }
   
   /**
@@ -1125,8 +1125,8 @@ class RoninTradingBot {
    */
   async executeTrade(fromMint, toMint, amount, strategy) {
     try {
-      const fromSymbol = Object.keys(this.#tokenRegistry).find(key => this.#tokenRegistry[key] === fromMint) || 'Unknown';
-      const toSymbol = Object.keys(this.#tokenRegistry).find(key => this.#tokenRegistry[key] === toMint) || 'Unknown';
+      const fromSymbol = Object.keys(this.tokenRegistry).find(key => this.tokenRegistry[key] === fromMint) || 'Unknown';
+      const toSymbol = Object.keys(this.tokenRegistry).find(key => this.tokenRegistry[key] === toMint) || 'Unknown';
       
       this.notify(`Preparing to trade ${amount.toFixed(6)} ${fromSymbol} to ${toSymbol}`);
       
@@ -1150,7 +1150,7 @@ class RoninTradingBot {
       const adjustedAmount = amount * 0.99; // Leave 1% for fees
       
       // In demo mode, simulate the trade
-      if (this.#demoMode) {
+      if (this.demoMode) {
         // Get quote to determine expected output
         const quote = await this.getJupiterQuote(fromMint, toMint, adjustedAmount);
         if (!quote) {
@@ -1179,14 +1179,14 @@ class RoninTradingBot {
       }
       
       // In simulation mode, just log the trade
-      if (this.#simulationMode) {
+      if (this.simulationMode) {
         this.notify(`[SIMULATION] Would trade ${adjustedAmount.toFixed(6)} ${fromSymbol} to ${toSymbol}`);
-        this.#successfulTrades++;
+        this.successfulTrades++;
         return true;
       }
       
       // Check if wallet is read-only
-      if (this.#walletType === 'readOnly') {
+      if (this.walletType === 'readOnly') {
         this.notify('Cannot execute trade in read-only mode', 'error');
         return false;
       }
@@ -1202,7 +1202,7 @@ class RoninTradingBot {
       
       if (!quote) {
         this.notify(`Failed to get Jupiter quote for ${fromSymbol} → ${toSymbol}`, 'error');
-        this.#failedTrades++;
+        this.failedTrades++;
         return false;
       }
       
@@ -1214,7 +1214,7 @@ class RoninTradingBot {
       
       // Calculate adaptive slippage based on token volatility
       let slippageBps = 50; // Default 0.5%
-      const tokenSpecificSlippage = this.#tokenSlippage[fromSymbol] || this.#tokenSlippage[toSymbol];
+      const tokenSpecificSlippage = this.tokenSlippage[fromSymbol] || this.tokenSlippage[toSymbol];
       if (tokenSpecificSlippage) {
         slippageBps = tokenSpecificSlippage * 100; // Convert percentage to basis points
       }
@@ -1223,7 +1223,7 @@ class RoninTradingBot {
       const transaction = await this.createSwapTransaction(quote, slippageBps);
       if (!transaction) {
         this.notify(`Failed to create swap transaction`, 'error');
-        this.#failedTrades++;
+        this.failedTrades++;
         return false;
       }
       
@@ -1235,7 +1235,7 @@ class RoninTradingBot {
       
       if (!signature) {
         this.notify(`Transaction failed to confirm`, 'error');
-        this.#failedTrades++;
+        this.failedTrades++;
         return false;
       }
       
@@ -1243,10 +1243,10 @@ class RoninTradingBot {
       this.notify(`Successfully traded ${adjustedAmount.toFixed(6)} ${fromSymbol} for approximately ${expectedOutput.toFixed(6)} ${toSymbol}`);
       
       // Add to successful trades count
-      this.#successfulTrades++;
+      this.successfulTrades++;
       
       // Record in trade history
-      this.#tradeHistory.push({
+      this.tradeHistory.push({
         timestamp: new Date().toISOString(),
         strategy,
         fromMint,
@@ -1262,10 +1262,10 @@ class RoninTradingBot {
       return true;
     } catch (error) {
       this.notify(`Trade execution failed: ${error.message}`, 'error');
-      this.#failedTrades++;
+      this.failedTrades++;
       
       // Record failed trade
-      this.#tradeHistory.push({
+      this.tradeHistory.push({
         timestamp: new Date().toISOString(),
         strategy,
         fromMint,
@@ -1286,25 +1286,25 @@ class RoninTradingBot {
    */
   async getTokenBalance(mint) {
     // If in demo mode, return demo balance
-    if (this.#demoMode) {
-      return this.#demoFunds[mint] || 0;
+    if (this.demoMode) {
+      return this.demoFunds[mint] || 0;
     }
     
     try {
-      if (mint === this.#tokenRegistry.SOL) {
-        const balance = await this.#connection.getBalance(this.#wallet.publicKey);
+      if (mint === this.tokenRegistry.SOL) {
+        const balance = await this.connection.getBalance(this.wallet.publicKey);
         return balance / 1e9; // Convert lamports to SOL
       }
       
       const tokenAccount = await getAssociatedTokenAddressSync(
         new PublicKey(mint),
-        this.#wallet.publicKey,
+        this.wallet.publicKey,
         false,
         TOKEN_PROGRAM_ID
       );
       
       try {
-        const info = await this.#connection.getTokenAccountBalance(tokenAccount);
+        const info = await this.connection.getTokenAccountBalance(tokenAccount);
         return parseFloat(info.value.amount) / Math.pow(10, info.value.decimals);
       } catch (e) {
         if (e.message.includes('Account not found') || e.message.includes('could not find account')) {
@@ -1325,51 +1325,51 @@ class RoninTradingBot {
    */
   async getTokenDecimals(mint) {
     // Check cache first
-    if (this.#tokenDecimalCache.has(mint)) {
-      return this.#tokenDecimalCache.get(mint);
+    if (this.tokenDecimalCache.has(mint)) {
+      return this.tokenDecimalCache.get(mint);
     }
     
     // Special case for SOL
-    if (mint === this.#tokenRegistry.SOL) {
-      this.#tokenDecimalCache.set(mint, 9);
+    if (mint === this.tokenRegistry.SOL) {
+      this.tokenDecimalCache.set(mint, 9);
       return 9;
     }
     
     try {
       // Get token metadata from Solana
-      const info = await this.#connection.getParsedAccountInfo(new PublicKey(mint));
+      const info = await this.connection.getParsedAccountInfo(new PublicKey(mint));
       
       if (info && info.value && info.value.data && 'parsed' in info.value.data) {
         const parsedData = info.value.data.parsed;
         if (parsedData && parsedData.info && parsedData.info.decimals) {
           const decimals = parsedData.info.decimals;
-          this.#tokenDecimalCache.set(mint, decimals);
+          this.tokenDecimalCache.set(mint, decimals);
           return decimals;
         }
       }
       
       // Fallbacks for common tokens
       const commonDecimals = {
-        [this.#tokenRegistry.USDC]: 6,
-        [this.#tokenRegistry.USDT]: 6,
-        [this.#tokenRegistry.BONK]: 5,
-        [this.#tokenRegistry.MSOL]: 9,
-        [this.#tokenRegistry.SAMO]: 9,
-        [this.#tokenRegistry.JUP]: 6,
+        [this.tokenRegistry.USDC]: 6,
+        [this.tokenRegistry.USDT]: 6,
+        [this.tokenRegistry.BONK]: 5,
+        [this.tokenRegistry.MSOL]: 9,
+        [this.tokenRegistry.SAMO]: 9,
+        [this.tokenRegistry.JUP]: 6,
       };
       
       if (commonDecimals[mint]) {
-        this.#tokenDecimalCache.set(mint, commonDecimals[mint]);
+        this.tokenDecimalCache.set(mint, commonDecimals[mint]);
         return commonDecimals[mint];
       }
       
       // Default to 9 decimals if we can't determine
       this.log(`Could not determine decimals for ${mint}, using default of 9`, 'warn');
-      this.#tokenDecimalCache.set(mint, 9);
+      this.tokenDecimalCache.set(mint, 9);
       return 9;
     } catch (error) {
       this.log(`Error getting token decimals for ${mint}: ${error.message}`, 'error');
-      this.#tokenDecimalCache.set(mint, 9);
+      this.tokenDecimalCache.set(mint, 9);
       return 9;
     }
   }
@@ -1382,14 +1382,14 @@ class RoninTradingBot {
     try {
       // If checked recently, use cached value to avoid API spam
       const now = Date.now();
-      if (now - this.#lastBalanceCheck < 60000 && this.#lastBalanceCheck > 0) {
-        return this.#currentPortfolioValue || 0;
+      if (now - this.lastBalanceCheck < 60000 && this.lastBalanceCheck > 0) {
+        return this.currentPortfolioValue || 0;
       }
       
       let totalValue = 0;
       
       // Check all tokens in registry
-      for (const [symbol, mint] of Object.entries(this.#tokenRegistry)) {
+      for (const [symbol, mint] of Object.entries(this.tokenRegistry)) {
         const balance = await this.getTokenBalance(mint);
         if (balance > 0) {
           const price = await this.getTokenPrice(mint);
@@ -1399,12 +1399,12 @@ class RoninTradingBot {
         }
       }
       
-      this.#lastBalanceCheck = now;
-      this.#currentPortfolioValue = totalValue;
+      this.lastBalanceCheck = now;
+      this.currentPortfolioValue = totalValue;
       return totalValue;
     } catch (error) {
       this.log(`Error calculating portfolio value: ${error.message}`, 'error');
-      return this.#currentPortfolioValue || 0;
+      return this.currentPortfolioValue || 0;
     }
   }
   
@@ -1416,13 +1416,13 @@ class RoninTradingBot {
     try {
       let totalValue = 0;
       
-      for (const [mint, amount] of Object.entries(this.#demoFunds)) {
+      for (const [mint, amount] of Object.entries(this.demoFunds)) {
         if (amount > 0) {
           const price = await this.getTokenPrice(mint);
           const value = amount * price;
           totalValue += value;
           
-          const symbol = Object.keys(this.#tokenRegistry).find(key => this.#tokenRegistry[key] === mint) || mint.slice(0, 6);
+          const symbol = Object.keys(this.tokenRegistry).find(key => this.tokenRegistry[key] === mint) || mint.slice(0, 6);
           this.log(`Demo ${symbol}: ${amount.toFixed(6)} * $${price.toFixed(6)} = $${value.toFixed(2)}`, 'debug');
         }
       }
@@ -1445,8 +1445,8 @@ class RoninTradingBot {
    */
   async updateDemoBalancesForTrade(fromMint, toMint, fromAmount, toAmount, strategy) {
     // Get token symbols
-    const fromSymbol = Object.keys(this.#tokenRegistry).find(key => this.#tokenRegistry[key] === fromMint) || 'Unknown';
-    const toSymbol = Object.keys(this.#tokenRegistry).find(key => this.#tokenRegistry[key] === toMint) || 'Unknown';
+    const fromSymbol = Object.keys(this.tokenRegistry).find(key => this.tokenRegistry[key] === fromMint) || 'Unknown';
+    const toSymbol = Object.keys(this.tokenRegistry).find(key => this.tokenRegistry[key] === toMint) || 'Unknown';
     
     // Calculate USD values
     const fromPrice = await this.getTokenPrice(fromMint);
@@ -1459,13 +1459,13 @@ class RoninTradingBot {
     const tradeProfitUsd = toValueUsd - fromValueUsd;
     
     // Update demo balances
-    this.#demoFunds[fromMint] = (this.#demoFunds[fromMint] || 0) - fromAmount;
-    if (this.#demoFunds[fromMint] < 0) this.#demoFunds[fromMint] = 0; // Prevent negative balances
+    this.demoFunds[fromMint] = (this.demoFunds[fromMint] || 0) - fromAmount;
+    if (this.demoFunds[fromMint] < 0) this.demoFunds[fromMint] = 0; // Prevent negative balances
     
-    this.#demoFunds[toMint] = (this.#demoFunds[toMint] || 0) + toAmount;
+    this.demoFunds[toMint] = (this.demoFunds[toMint] || 0) + toAmount;
     
     // Update P&L
-    this.#demoProfitLoss += tradeProfitUsd;
+    this.demoProfitLoss += tradeProfitUsd;
     
     // Create trade record
     const trade = {
@@ -1484,9 +1484,9 @@ class RoninTradingBot {
     };
     
     // Add to history
-    this.#demoTradeHistory.push(trade);
-    if (this.#demoTradeHistory.length > 100) {
-      this.#demoTradeHistory = this.#demoTradeHistory.slice(-100); // Keep only last 100 trades
+    this.demoTradeHistory.push(trade);
+    if (this.demoTradeHistory.length > 100) {
+      this.demoTradeHistory = this.demoTradeHistory.slice(-100); // Keep only last 100 trades
     }
     
     // Save updated demo funds
@@ -1503,15 +1503,15 @@ class RoninTradingBot {
   async getTokenPrice(mint) {
     try {
       // Check cache first
-      const cached = this.#tokenPriceCache.get(mint);
+      const cached = this.tokenPriceCache.get(mint);
       const now = Date.now();
-      if (cached && (now - cached.timestamp) < this.#priceCacheTTL) {
+      if (cached && (now - cached.timestamp) < this.priceCacheTTL) {
         return cached.price;
       }
       
       // Special case for stablecoins
-      if (mint === this.#tokenRegistry.USDC || mint === this.#tokenRegistry.USDT) {
-        this.#tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
+      if (mint === this.tokenRegistry.USDC || mint === this.tokenRegistry.USDT) {
+        this.tokenPriceCache.set(mint, { price: 1.0, timestamp: now });
         return 1.0;
       }
       
@@ -1522,7 +1522,7 @@ class RoninTradingBot {
       
       if (data && data.data && data.data[mint] && data.data[mint].price) {
         const price = data.data[mint].price;
-        this.#tokenPriceCache.set(mint, { price, timestamp: now });
+        this.tokenPriceCache.set(mint, { price, timestamp: now });
         return price;
       }
       
@@ -1532,18 +1532,18 @@ class RoninTradingBot {
       
       // Fallbacks for common tokens
       const fallbackPrices = {
-        [this.#tokenRegistry.SOL]: 150,
-        [this.#tokenRegistry.BONK]: 0.00001,
-        [this.#tokenRegistry.SAMO]: 0.02,
-        [this.#tokenRegistry.MSOL]: 155,
-        [this.#tokenRegistry.JUP]: 0.5,
+        [this.tokenRegistry.SOL]: 150,
+        [this.tokenRegistry.BONK]: 0.00001,
+        [this.tokenRegistry.SAMO]: 0.02,
+        [this.tokenRegistry.MSOL]: 155,
+        [this.tokenRegistry.JUP]: 0.5,
       };
       
       if (fallbackPrices[mint]) {
         this.log(`Using fallback price for ${mint}: $${fallbackPrices[mint]}`, 'warn');
-        this.#tokenPriceCache.set(mint, {
+        this.tokenPriceCache.set(mint, {
           price: fallbackPrices[mint],
-          timestamp: Date.now() - (this.#priceCacheTTL / 2) // Shorter cache time for fallbacks
+          timestamp: Date.now() - (this.priceCacheTTL / 2) // Shorter cache time for fallbacks
         });
         return fallbackPrices[mint];
       }
@@ -1559,7 +1559,7 @@ class RoninTradingBot {
   async getTokenPriceMovements() {
     try {
       // Create set of unique tokens
-      const uniqueTokens = new Set(Object.values(this.#tokenRegistry));
+      const uniqueTokens = new Set(Object.values(this.tokenRegistry));
       
       // Create comma-separated list of mints
       const mints = Array.from(uniqueTokens).join(',');
@@ -1581,12 +1581,12 @@ class RoninTradingBot {
       }
       
       // Cache the movements
-      this.#tokenMovements = movements;
+      this.tokenMovements = movements;
       
       return movements;
     } catch (error) {
       this.log(`Error fetching price movements: ${error.message}`, 'error');
-      return this.#tokenMovements || new Map(); // Return cached movements if available
+      return this.tokenMovements || new Map(); // Return cached movements if available
     }
   }
   
@@ -1617,7 +1617,7 @@ class RoninTradingBot {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       
-      const response = await fetch(`${this.#jupiterApiUrl}/quote?${params}`, {
+      const response = await fetch(`${this.jupiterApiUrl}/quote?${params}`, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -1649,14 +1649,14 @@ class RoninTradingBot {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
       
-      const response = await fetch(`${this.#jupiterApiUrl}/swap`, {
+      const response = await fetch(`${this.jupiterApiUrl}/swap`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           route: route,
-          userPublicKey: this.#wallet.publicKey.toString(),
+          userPublicKey: this.wallet.publicKey.toString(),
           slippageBps
         }),
         signal: controller.signal
@@ -1680,13 +1680,13 @@ class RoninTradingBot {
         // It's a versioned transaction
         this.log('Processing versioned transaction from Jupiter', 'debug');
         const versionedTx = VersionedTransaction.deserialize(messageBytes);
-        versionedTx.sign([this.#wallet]);
+        versionedTx.sign([this.wallet]);
         return versionedTx;
       } else {
         // It's a legacy transaction
         this.log('Processing legacy transaction from Jupiter', 'debug');
         const legacyTx = Transaction.from(messageBytes);
-        legacyTx.partialSign(this.#wallet);
+        legacyTx.partialSign(this.wallet);
         return legacyTx;
       }
     } catch (error) {
@@ -1706,13 +1706,13 @@ class RoninTradingBot {
       
       // Handle versioned vs legacy transactions
       if (transaction instanceof VersionedTransaction) {
-        signature = await this.#connection.sendTransaction(transaction, {
+        signature = await this.connection.sendTransaction(transaction, {
           skipPreflight: false,
           preflightCommitment: 'confirmed',
           maxRetries: 3
         });
       } else {
-        signature = await this.#connection.sendTransaction(transaction, [this.#wallet], {
+        signature = await this.connection.sendTransaction(transaction, [this.wallet], {
           skipPreflight: false,
           preflightCommitment: 'confirmed',
           maxRetries: 3
@@ -1722,7 +1722,7 @@ class RoninTradingBot {
       this.log(`Transaction sent with signature: ${signature}`, 'debug');
       
       // Wait for confirmation
-      const status = await this.#connection.confirmTransaction({
+      const status = await this.connection.confirmTransaction({
         signature,
         blockhash: transaction.recentBlockhash,
         lastValidBlockHeight: transaction.lastValidBlockHeight
@@ -1757,7 +1757,7 @@ class RoninTradingBot {
    * @returns {Promise<boolean>} Success or failure
    */
   async ensureTokenAccount(mint) {
-    if (mint === this.#tokenRegistry.SOL) {
+    if (mint === this.tokenRegistry.SOL) {
       // SOL doesn't need an associated token account
       return true;
     }
@@ -1766,13 +1766,13 @@ class RoninTradingBot {
       const mintPubkey = new PublicKey(mint);
       const associatedTokenAddress = getAssociatedTokenAddressSync(
         mintPubkey,
-        this.#wallet.publicKey,
+        this.wallet.publicKey,
         false,
         TOKEN_PROGRAM_ID
       );
       
       // Check if account exists
-      const account = await this.#connection.getAccountInfo(associatedTokenAddress);
+      const account = await this.connection.getAccountInfo(associatedTokenAddress);
       
       if (account) {
         return true; // Account exists
@@ -1783,30 +1783,30 @@ class RoninTradingBot {
       
       const transaction = new Transaction().add(
         createAssociatedTokenAccountInstruction(
-          this.#wallet.publicKey, // payer
+          this.wallet.publicKey, // payer
           associatedTokenAddress, // associated token account
-          this.#wallet.publicKey, // owner
+          this.wallet.publicKey, // owner
           mintPubkey, // mint
           TOKEN_PROGRAM_ID
         )
       );
       
       // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await this.#connection.getLatestBlockhash('finalized');
+      const { blockhash, lastValidBlockHeight } = await this.connection.getLatestBlockhash('finalized');
       transaction.recentBlockhash = blockhash;
       transaction.lastValidBlockHeight = lastValidBlockHeight;
-      transaction.feePayer = this.#wallet.publicKey;
+      transaction.feePayer = this.wallet.publicKey;
       
       // Sign and send transaction
-      transaction.sign(this.#wallet);
-      const signature = await this.#connection.sendTransaction(transaction, [this.#wallet], {
+      transaction.sign(this.wallet);
+      const signature = await this.connection.sendTransaction(transaction, [this.wallet], {
         skipPreflight: false,
         preflightCommitment: 'confirmed',
         maxRetries: 3
       });
       
       // Wait for confirmation
-      await this.#connection.confirmTransaction({
+      await this.connection.confirmTransaction({
         signature,
         blockhash,
         lastValidBlockHeight
@@ -1848,12 +1848,12 @@ class RoninTradingBot {
    * @returns {Promise<Object>} Scan results
    */
   async scanChainForOpportunities(durationMs = 60000) {
-    if (this.#tokenDiscoveryActive) {
+    if (this.tokenDiscoveryActive) {
       this.notify('Chain scan already in progress');
-      return this.#scanResults;
+      return this.scanResults;
     }
     
-    this.#tokenDiscoveryActive = true;
+    this.tokenDiscoveryActive = true;
     const startTime = Date.now();
     this.notify(`Starting Solana chain scan (minimum ${durationMs/1000} seconds)...`);
     
@@ -1892,7 +1892,7 @@ class RoninTradingBot {
       const arbitrageOpportunities = opportunities.filter(o => o.signal === 'ARBITRAGE').slice(0, 10);
       
       // Store scan results
-      this.#scanResults = {
+      this.scanResults = {
         scanTime: new Date(),
         duration: Date.now() - startTime,
         tokensScanned: pricedTokens.length,
@@ -1903,12 +1903,12 @@ class RoninTradingBot {
       };
       
       this.notify(`Chain scan complete. Found ${buyOpportunities.length} buy signals, ${sellOpportunities.length} sell signals, and ${arbitrageOpportunities.length} arbitrage opportunities`);
-      return this.#scanResults;
+      return this.scanResults;
     } catch (error) {
       this.notify(`Error scanning chain: ${error.message}`, 'error');
       return null;
     } finally {
-      this.#tokenDiscoveryActive = false;
+      this.tokenDiscoveryActive = false;
     }
   }
   
@@ -1921,7 +1921,7 @@ class RoninTradingBot {
       this.notify('Discovering tokens across Solana...');
       
       // Use Helius API to get top tokens by market cap/volume
-      const url = `https://api.helius.xyz/v0/tokens?api-key=${this.#heliusApiKey}`;
+      const url = `https://api.helius.xyz/v0/tokens?api-key=${this.heliusApiKey}`;
       
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Helius API error: ${response.status}`);
@@ -1931,8 +1931,8 @@ class RoninTradingBot {
       
       // Filter for tokens with sufficient liquidity and volume
       const viableTokens = data.filter(token => {
-        const hasLiquidity = token.marketCap && token.marketCap > this.#minLiquidity;
-        const hasVolume = token.volume24h && token.volume24h > this.#minVolume;
+        const hasLiquidity = token.marketCap && token.marketCap > this.minLiquidity;
+        const hasVolume = token.volume24h && token.volume24h > this.minVolume;
         return hasLiquidity && hasVolume;
       });
       
@@ -1967,11 +1967,11 @@ class RoninTradingBot {
       }
       
       // Limit to maximum tokens to avoid overloading
-      const limitedTokens = allTokens.slice(0, this.#maxScanTokens);
+      const limitedTokens = allTokens.slice(0, this.maxScanTokens);
       
       // Cache these tokens for future reference
       limitedTokens.forEach(token => {
-        this.#discoveredTokens.set(token.address, token);
+        this.discoveredTokens.set(token.address, token);
       });
       
       return limitedTokens;
@@ -1985,7 +1985,7 @@ class RoninTradingBot {
         if (!response.ok) throw new Error(`Jupiter API error: ${response.status}`);
         
         const tokens = await response.json();
-        return tokens.slice(0, this.#maxScanTokens);
+        return tokens.slice(0, this.maxScanTokens);
       } catch (fallbackError) {
         this.log(`Fallback token discovery failed: ${fallbackError.message}`, 'error');
         return [];
@@ -2023,8 +2023,8 @@ class RoninTradingBot {
           if (data) {
             results.push({
               mint,
-              symbol: typeof token === 'string' ? this.#mintToSymbol(mint) : token.symbol,
-              name: typeof token === 'string' ? this.#mintToSymbol(mint) : token.name || token.symbol,
+              symbol: typeof token === 'string' ? this.mintToSymbol(mint) : token.symbol,
+              name: typeof token === 'string' ? this.mintToSymbol(mint) : token.name || token.symbol,
               price: data.price || 0,
               priceChange24h: data.priceChange24h || 0,
               volume24h: data.volume24h || 0
@@ -2102,7 +2102,7 @@ class RoninTradingBot {
       if (!token.price || token.price === 0) continue;
       
       // Skip stablecoins
-      if (this.#isStablecoin(token.mint)) continue;
+      if (this.isStablecoin(token.mint)) continue;
       
       let signal = null;
       let score = 0;
@@ -2165,7 +2165,7 @@ class RoninTradingBot {
   async checkForArbitrageOpportunities(tokens) {
     const opportunities = [];
     
-    if (this.#dexConnectors.size < 2) {
+    if (this.dexConnectors.size < 2) {
       await this.initializeDexConnectors();
     }
     
@@ -2174,7 +2174,7 @@ class RoninTradingBot {
         const prices = [];
         
         // Get prices from all connected DEXs
-        for (const [dexName, connector] of this.#dexConnectors.entries()) {
+        for (const [dexName, connector] of this.dexConnectors.entries()) {
           try {
             const price = await connector.getPrice(token.mint);
             prices.push({ dex: dexName, price });
@@ -2193,7 +2193,7 @@ class RoninTradingBot {
         // Calculate profit potential
         const profitPercent = ((mostExpensive.price - cheapest.price) / cheapest.price) * 100;
         
-        if (profitPercent > this.#minArbitrageProfit) {
+        if (profitPercent > this.minArbitrageProfit) {
           opportunities.push({
             mint: token.mint,
             symbol: token.symbol,
@@ -2231,7 +2231,7 @@ class RoninTradingBot {
         return await this.executeArbitrage(opportunity);
       } else if (opportunity.signal === 'BUY') {
         // Execute buy trade
-        const fromMint = this.#tokenRegistry.USDC;
+        const fromMint = this.tokenRegistry.USDC;
         const toMint = opportunity.mint;
         
         // Calculate trade size (risk 10% of USDC balance)
@@ -2242,7 +2242,7 @@ class RoninTradingBot {
       } else if (opportunity.signal === 'SELL') {
         // Execute sell trade - determine if we have the token
         const fromMint = opportunity.mint;
-        const toMint = this.#tokenRegistry.USDC;
+        const toMint = this.tokenRegistry.USDC;
         
         // Check if we have this token
         const tokenBalance = await this.getTokenBalance(fromMint);
@@ -2269,10 +2269,10 @@ class RoninTradingBot {
    * @param {string} mint Token mint address
    * @returns {boolean} Whether the token is a stablecoin
    */
-  #isStablecoin(mint) {
+  isStablecoin(mint) {
     const stablecoins = [
-      this.#tokenRegistry.USDC,
-      this.#tokenRegistry.USDT,
+      this.tokenRegistry.USDC,
+      this.tokenRegistry.USDT,
       // Add other stablecoins
       'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
       'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
@@ -2287,12 +2287,12 @@ class RoninTradingBot {
    * @param {string} mint Token mint address
    * @returns {string} Symbol for the token
    */
-  #mintToSymbol(mint) {
-    const cachedToken = this.#discoveredTokens.get(mint);
+  mintToSymbol(mint) {
+    const cachedToken = this.discoveredTokens.get(mint);
     if (cachedToken) return cachedToken.symbol;
     
     // Check registry
-    for (const [symbol, address] of Object.entries(this.#tokenRegistry)) {
+    for (const [symbol, address] of Object.entries(this.tokenRegistry)) {
       if (address === mint) return symbol;
     }
     
@@ -2305,7 +2305,7 @@ class RoninTradingBot {
    * @returns {Object} Latest scan results
    */
   getLatestScanResults() {
-    return this.#scanResults;
+    return this.scanResults;
   }
   
   /**
@@ -2314,14 +2314,14 @@ class RoninTradingBot {
   saveDemoFunds() {
     try {
       const demoData = {
-        funds: this.#demoFunds,
-        history: this.#demoTradeHistory,
-        profitLoss: this.#demoProfitLoss,
-        initialValue: this.#demoInitialValue,
+        funds: this.demoFunds,
+        history: this.demoTradeHistory,
+        profitLoss: this.demoProfitLoss,
+        initialValue: this.demoInitialValue,
         lastUpdated: new Date().toISOString()
       };
       
-      const demoStoragePath = path.join(this.#dataDir, 'demo_funds.json');
+      const demoStoragePath = path.join(this.dataDir, 'demo_funds.json');
       fs.writeFileSync(demoStoragePath, JSON.stringify(demoData, null, 2));
       this.log('Demo funds saved', 'debug');
     } catch (error) {
@@ -2334,14 +2334,14 @@ class RoninTradingBot {
    */
   loadDemoFunds() {
     try {
-      const demoStoragePath = path.join(this.#dataDir, 'demo_funds.json');
+      const demoStoragePath = path.join(this.dataDir, 'demo_funds.json');
       if (fs.existsSync(demoStoragePath)) {
         const data = JSON.parse(fs.readFileSync(demoStoragePath, 'utf8'));
         
-        this.#demoFunds = data.funds || this.#demoFunds;
-        this.#demoTradeHistory = data.history || [];
-        this.#demoProfitLoss = data.profitLoss || 0;
-        this.#demoInitialValue = data.initialValue || 0;
+        this.demoFunds = data.funds || this.demoFunds;
+        this.demoTradeHistory = data.history || [];
+        this.demoProfitLoss = data.profitLoss || 0;
+        this.demoInitialValue = data.initialValue || 0;
         
         this.log('Demo funds loaded from storage', 'debug');
       } else {
@@ -2356,21 +2356,21 @@ class RoninTradingBot {
    * Reset demo funds to default values
    */
   resetDemoFunds() {
-    this.#demoFunds = {
-      [this.#tokenRegistry.USDC]: 1000,
-      [this.#tokenRegistry.SOL]: 3,
-      [this.#tokenRegistry.BONK]: 50000000,
-      [this.#tokenRegistry.MSOL]: 1,
-      [this.#tokenRegistry.SAMO]: 1000,
-      [this.#tokenRegistry.JUP]: 100
+    this.demoFunds = {
+      [this.tokenRegistry.USDC]: 1000,
+      [this.tokenRegistry.SOL]: 3,
+      [this.tokenRegistry.BONK]: 50000000,
+      [this.tokenRegistry.MSOL]: 1,
+      [this.tokenRegistry.SAMO]: 1000,
+      [this.tokenRegistry.JUP]: 100
     };
     
-    this.#demoTradeHistory = [];
-    this.#demoProfitLoss = 0;
-    this.#demoInitialValue = 0;
+    this.demoTradeHistory = [];
+    this.demoProfitLoss = 0;
+    this.demoInitialValue = 0;
     
     this.calculateDemoPortfolioValue().then(value => {
-      this.#demoInitialValue = value;
+      this.demoInitialValue = value;
       this.notify(`Demo funds reset. New portfolio value: $${value.toFixed(2)}`);
       this.saveDemoFunds();
     });
@@ -2381,24 +2381,24 @@ class RoninTradingBot {
    * @param {boolean} enabled Whether to enable demo mode
    */
   enableDemoMode(enabled = true) {
-    this.#demoMode = enabled;
+    this.demoMode = enabled;
     
     if (enabled) {
       this.notify('Demo mode enabled - using virtual funds');
       this.loadDemoFunds();
       
       // Calculate initial portfolio value for P&L tracking
-      if (this.#demoInitialValue === 0) {
+      if (this.demoInitialValue === 0) {
         this.calculateDemoPortfolioValue().then(value => {
-          this.#demoInitialValue = value;
-          this.notify(`Initial demo portfolio value: $${this.#demoInitialValue.toFixed(2)}`);
+          this.demoInitialValue = value;
+          this.notify(`Initial demo portfolio value: $${this.demoInitialValue.toFixed(2)}`);
         });
       }
     } else {
       this.notify('Demo mode disabled - using real balances');
     }
     
-    return this.#demoMode;
+    return this.demoMode;
   }
   
   /**
@@ -2406,7 +2406,7 @@ class RoninTradingBot {
    * @returns {boolean} Whether demo mode is enabled
    */
   isDemoMode() {
-    return this.#demoMode;
+    return this.demoMode;
   }
   
   /**
@@ -2417,15 +2417,15 @@ class RoninTradingBot {
   setDemoBalance(token, amount) {
     // Handle symbol or mint address
     let mint = token;
-    if (this.#tokenRegistry[token.toUpperCase()]) {
-      mint = this.#tokenRegistry[token.toUpperCase()];
+    if (this.tokenRegistry[token.toUpperCase()]) {
+      mint = this.tokenRegistry[token.toUpperCase()];
     }
     
     if (!mint) {
       throw new Error(`Unknown token: ${token}`);
     }
     
-    this.#demoFunds[mint] = amount;
+    this.demoFunds[mint] = amount;
     this.notify(`Set demo balance for ${token}: ${amount}`);
     this.saveDemoFunds();
   }
@@ -2487,11 +2487,11 @@ class RoninTradingBot {
         throw new Error('Invalid private key format');
       }
       
-      this.#wallet = keypair;
-      this.#walletType = 'privateKey';
-      this.#walletAddress = keypair.publicKey.toString();
+      this.wallet = keypair;
+      this.walletType = 'privateKey';
+      this.walletAddress = keypair.publicKey.toString();
       
-      this.notify(`Connected with wallet: ${this.#walletAddress}`);
+      this.notify(`Connected with wallet: ${this.walletAddress}`);
       return true;
     } catch (error) {
       this.notify(`Error connecting with private key: ${error.message}`, 'error');
@@ -2509,11 +2509,11 @@ class RoninTradingBot {
       // Validate public key
       const pubKey = new PublicKey(publicKey);
       
-      this.#walletAddress = pubKey.toString();
-      this.#walletType = 'readOnly';
+      this.walletAddress = pubKey.toString();
+      this.walletType = 'readOnly';
       
       // Create a dummy wallet with only public key access
-      this.#wallet = {
+      this.wallet = {
         publicKey: pubKey,
         // Override signing methods to prevent trades
         signTransaction: () => {
@@ -2524,7 +2524,7 @@ class RoninTradingBot {
         }
       };
       
-      this.notify(`Connected in read-only mode with address: ${this.#walletAddress}`);
+      this.notify(`Connected in read-only mode with address: ${this.walletAddress}`);
       this.notify('WARNING: Trading functions are disabled in read-only mode', 'warn');
       
       return true;
@@ -2539,24 +2539,24 @@ class RoninTradingBot {
    * @param {string} name Wallet name/label
    */
   saveWalletConfig(name) {
-    if (!this.#walletAddress) {
+    if (!this.walletAddress) {
       this.notify('No wallet connected', 'error');
       return false;
     }
     
     try {
       const walletData = {
-        address: this.#walletAddress,
-        type: this.#walletType,
+        address: this.walletAddress,
+        type: this.walletType,
         lastUsed: new Date().toISOString()
       };
       
       // Store wallet config (but never private keys)
-      this.#savedWallets[name] = walletData;
+      this.savedWallets[name] = walletData;
       
       // Save to file
-      const walletsFile = path.join(this.#dataDir, 'saved_wallets.json');
-      fs.writeFileSync(walletsFile, JSON.stringify(this.#savedWallets, null, 2));
+      const walletsFile = path.join(this.dataDir, 'saved_wallets.json');
+      fs.writeFileSync(walletsFile, JSON.stringify(this.savedWallets, null, 2));
       
       this.notify(`Wallet configuration saved as "${name}"`);
       return true;
@@ -2572,12 +2572,12 @@ class RoninTradingBot {
    */
   loadSavedWallets() {
     try {
-      const walletsFile = path.join(this.#dataDir, 'saved_wallets.json');
+      const walletsFile = path.join(this.dataDir, 'saved_wallets.json');
       if (fs.existsSync(walletsFile)) {
-        this.#savedWallets = JSON.parse(fs.readFileSync(walletsFile, 'utf8'));
-        this.log(`Loaded ${Object.keys(this.#savedWallets).length} saved wallet configurations`);
+        this.savedWallets = JSON.parse(fs.readFileSync(walletsFile, 'utf8'));
+        this.log(`Loaded ${Object.keys(this.savedWallets).length} saved wallet configurations`);
       }
-      return this.#savedWallets;
+      return this.savedWallets;
     } catch (error) {
       this.log(`Error loading saved wallets: ${error.message}`, 'error');
       return {};
@@ -2589,15 +2589,15 @@ class RoninTradingBot {
    * @returns {Object} Wallet information
    */
   getWalletInfo() {
-    if (!this.#walletAddress) {
+    if (!this.walletAddress) {
       return { connected: false };
     }
     
     return {
       connected: true,
-      address: this.#walletAddress,
-      type: this.#walletType,
-      readOnly: this.#walletType === 'readOnly'
+      address: this.walletAddress,
+      type: this.walletType,
+      readOnly: this.walletType === 'readOnly'
     };
   }
   
@@ -2605,9 +2605,9 @@ class RoninTradingBot {
    * Disconnect current wallet
    */
   disconnectWallet() {
-    this.#wallet = null;
-    this.#walletAddress = null;
-    this.#walletType = null;
+    this.wallet = null;
+    this.walletAddress = null;
+    this.walletType = null;
     this.notify('Wallet disconnected');
     return true;
   }
@@ -2618,17 +2618,17 @@ class RoninTradingBot {
    */
   getStatus() {
     return {
-      isRunning: this.#isRunning,
-      simulationMode: this.#simulationMode,
-      demoMode: this.#demoMode,
-      walletConnected: !!this.#wallet,
-      walletAddress: this.#walletAddress,
-      walletType: this.#walletType,
-      currentBalanceUsd: this.#currentPortfolioValue,
-      successfulTrades: this.#successfulTrades,
-      failedTrades: this.#failedTrades,
-      totalTrades: this.#successfulTrades + this.#failedTrades,
-      profitLoss: this.#demoMode ? this.#demoProfitLoss : this.#totalProfitLoss
+      isRunning: this.isRunning,
+      simulationMode: this.simulationMode,
+      demoMode: this.demoMode,
+      walletConnected: !!this.wallet,
+      walletAddress: this.walletAddress,
+      walletType: this.walletType,
+      currentBalanceUsd: this.currentPortfolioValue,
+      successfulTrades: this.successfulTrades,
+      failedTrades: this.failedTrades,
+      totalTrades: this.successfulTrades + this.failedTrades,
+      profitLoss: this.demoMode ? this.demoProfitLoss : this.totalProfitLoss
     };
   }
   
@@ -2638,10 +2638,10 @@ class RoninTradingBot {
    * @returns {Array} Trade history
    */
   getTradeHistory(limit = 20) {
-    if (this.#demoMode) {
-      return this.#demoTradeHistory.slice(-limit);
+    if (this.demoMode) {
+      return this.demoTradeHistory.slice(-limit);
     }
-    return this.#tradeHistory.slice(-limit);
+    return this.tradeHistory.slice(-limit);
   }
   
   /**
@@ -2649,7 +2649,7 @@ class RoninTradingBot {
    * @returns {Object} Token registry
    */
   getTokenRegistry() {
-    return this.#tokenRegistry;
+    return this.tokenRegistry;
   }
   
   /**
@@ -2657,7 +2657,7 @@ class RoninTradingBot {
    * @returns {boolean} Is simulation mode
    */
   isSimulationMode() {
-    return this.#simulationMode;
+    return this.simulationMode;
   }
   
   /**
@@ -2665,9 +2665,9 @@ class RoninTradingBot {
    * @returns {boolean} New simulation mode state
    */
   toggleSimulationMode() {
-    this.#simulationMode = !this.#simulationMode;
-    this.notify(`Simulation mode ${this.#simulationMode ? 'enabled' : 'disabled'}`);
-    return this.#simulationMode;
+    this.simulationMode = !this.simulationMode;
+    this.notify(`Simulation mode ${this.simulationMode ? 'enabled' : 'disabled'}`);
+    return this.simulationMode;
   }
   
   /**
@@ -2675,7 +2675,7 @@ class RoninTradingBot {
    * @returns {boolean} Is running
    */
   isRunning() {
-    return this.#isRunning;
+    return this.isRunning;
   }
 }
 
