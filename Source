@@ -4008,7 +4008,7 @@ class RoninTradingBot {
         // Calculate profit potential
         const profitPercent = ((mostExpensive.price - cheapest.price) / cheapest.price) * 100;
         
-        if (profitPercent > this.#minArbitrageProfit) {
+        if (profitPercent > this.minArbitrageProfit) {
           opportunities.push({
             mint: token.mint,
             symbol: token.symbol,
