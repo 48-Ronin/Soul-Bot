@@ -1,0 +1,38 @@
+/* Add styles for pagination and trade animations */
+.new-trade {
+  animation: highlight-new 3s ease-out;
+}
+
+@keyframes highlight-new {
+  0% { background-color: rgba(25, 135, 84, 0.3); }
+  100% { background-color: transparent; }
+}
+
+.trades-pagination .btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trades-pagination .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.25em 0.5em;
+}
+
+/* Add a smooth transition for trades table */
+#trades-table-body tr {
+  transition: background-color 0.3s ease;
+}
+
+/* Make the pagination info subtle */
+.trades-info {
+  color: #6c757d;
+} 

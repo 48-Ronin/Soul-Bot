@@ -1,0 +1,21 @@
+version: '3'
+
+services:
+  soul-bot:
+    build: .
+    container_name: soul-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - SIMULATION_MODE=true
+      - AUTO_START=true
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge

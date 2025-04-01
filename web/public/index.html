@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Soul-Bot Trading Dashboard</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/wallet.css">
+    <!-- Solana Web3 -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <!-- Socket.io -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --primary: #6d28d9;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --dark: #1e293b;
+            --light: #f8fafc;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+        
+        .navbar {
+            background-color: var(--primary);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-brand {
+            font-weight: 700;
+            color: white !important;
+        }
+        
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 1.5rem;
+            border: none;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background-color: white;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            font-weight: 600;
+        }
+        
+        .stats-card {
+            transition: all 0.2s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stats-card.balance {
+            border-left-color: var(--primary);
+        }
+        
+        .stats-card.profit {
+            border-left-color: var(--success);
+        }
+        
+        .stats-card.loss {
+            border-left-color: var(--danger);
+        }
+        
+        .stats-card.ml {
+            border-left-color: var(--warning);
+        }
+        
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        
+        .stat-label {
+            color: #64748b;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .positive {
+            color: var(--success);
+        }
+        
+        .negative {
+            color: var(--danger);
+        }
+        
+        .trade-row {
+            cursor: pointer;
+            transition: background-color 0.1s ease;
+        }
+        
+        .trade-row:hover {
+            background-color: rgba(0,0,0,0.02);
+        }
+        
+        .trade-row::after {
+            content: '+';
+            position: absolute;
+            right: 15px;
+            color: var(--primary);
+            opacity: 0.5;
+        }
+        
+        .trade-row.expanded::after {
+            content: '-';
+        }
+        
+        .trade-detail {
+            background-color: rgba(0,0,0,0.01);
+        }
+        
+        .trade-detail-content {
+            background-color: rgba(109, 40, 217, 0.05);
+            border-left: 3px solid var(--primary);
+            border-radius: 0 5px 5px 0;
+            margin: 0.5rem;
+            padding: 1rem;
+            font-size: 0.9rem;
+        }
+        
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 3px 8px;
+            background-color: rgba(255,255,255,0.5);
+            border-radius: 4px;
+        }
+        
+        .trades-table th {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+        
+        .badge-success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        
+        .badge-danger {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+        
+        .bot-status {
+            display: inline-flex;
+            align-items: center;
+            font-weight: 500;
+            padding: 0.35rem 0.75rem;
+            border-radius: 5px;
+            margin-right: 1rem;
+        }
+        
+        .bot-status.online {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+        
+        .bot-status.offline {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+        
+        .bot-status i {
+            margin-right: 0.5rem;
+        }
+        
+        .discovered-token {
+            background-color: rgba(107, 114, 128, 0.1);
+            border-radius: 5px;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .discovered-token.new {
+            background-color: rgba(249, 115, 22, 0.1);
+            border-left: 3px solid #f97316;
+        }
+        
+        .chart-container {
+            height: 350px;
+            position: relative;
+        }
+        
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        
+        .status-dot.online {
+            background-color: var(--success);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+        
+        .status-dot.offline {
+            background-color: var(--danger);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+        
+        .token-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-right: 5px;
+            background-color: #e2e8f0;
+        }
+        
+        /* Animation for new trades */
+        @keyframes highlight {
+            0% { background-color: rgba(16, 185, 129, 0.2); }
+            100% { background-color: transparent; }
+        }
+        
+        .new-trade {
+            animation: highlight 2s ease-out;
+        }
+        
+        /* Notification styles */
+        .notification {
+            position: relative;
+            background-color: white;
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: translateX(100%);
+            animation: slide-in 0.3s forwards;
+            max-width: 300px;
+        }
+        
+        .notification.info {
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .notification.success {
+            border-left: 4px solid #10b981;
+        }
+        
+        .notification.warning {
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .notification.error {
+            border-left: 4px solid #ef4444;
+        }
+        
+        .notification.fade-out {
+            animation: fade-out 0.5s forwards;
+        }
+        
+        @keyframes slide-in {
+            to { transform: translateX(0); }
+        }
+        
+        @keyframes fade-out {
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+        
+        #notification-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        
+        .trading-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .trading-controls select {
+            min-width: 120px;
+        }
+        
+        .trading-controls button {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 15px;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .trading-controls button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .trading-controls button i {
+            font-size: 14px;
+        }
+        
+        .trading-controls .btn-success {
+            background-color: #10b981;
+            border-color: #059669;
+        }
+        
+        .trading-controls .btn-success:hover:not(:disabled) {
+            background-color: #059669;
+            border-color: #047857;
+        }
+        
+        .trading-controls .btn-danger {
+            background-color: #ef4444;
+            border-color: #dc2626;
+        }
+        
+        .trading-controls .btn-danger:hover:not(:disabled) {
+            background-color: #dc2626;
+            border-color: #b91c1c;
+        }
+        
+        .trading-controls .btn-warning {
+            background-color: #f59e0b;
+            border-color: #d97706;
+            color: white;
+        }
+        
+        .trading-controls .btn-warning:hover:not(:disabled) {
+            background-color: #d97706;
+            border-color: #b45309;
+        }
+        
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            position: relative;
+        }
+        
+        .status-dot.online {
+            background-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+        }
+        
+        .status-dot.online::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: #10b981;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.offline {
+            background-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            70% {
+                transform: scale(2);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0;
+            }
+        }
+        
+        /* Trade items styling */
+        #recent-trades-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .trade-item {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .trade-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .trade-item.success {
+            border-left: 4px solid #28a745;
+        }
+        
+        .trade-item.failed {
+            border-left: 4px solid #dc3545;
+        }
+        
+        .trade-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .trade-time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .trade-status {
+            font-size: 12px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+        
+        .trade-status.success {
+            background-color: rgba(40, 167, 69, 0.2);
+            color: #28a745;
+        }
+        
+        .trade-status.failed {
+            background-color: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+        
+        .trade-body {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .trade-pair {
+            font-weight: bold;
+        }
+        
+        .trade-amount {
+            color: #6c757d;
+        }
+        
+        .trade-profit {
+            font-weight: bold;
+            margin-left: auto;
+        }
+        
+        .trade-profit.positive {
+            color: #28a745;
+        }
+        
+        .trade-profit.negative {
+            color: #dc3545;
+        }
+        
+        .empty-trades-message {
+            color: #6c757d;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .metric-box {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .metric-box h6 {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .metric-box h3 {
+            font-size: 24px;
+            margin: 0;
+            color: #333;
+        }
+        
+        .metric-box i {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: #ddd;
+        }
+        
+        .positive {
+            color: #28a745 !important;
+        }
+        
+        .negative {
+            color: #dc3545 !important;
+        }
+        
+        /* Remove floating elements in the corner */
+        .floating-box,
+        .corner-box,
+        .fullscreen-icon,
+        .ui-icon-fullscreen,
+        [data-fullscreen="true"],
+        .fullscreen-container,
+        .corner-container,
+        .action-buttons > *:last-child {
+            display: none !important;
+        }
+        
+        /* Fix specific UI issues */
+        .container-fluid {
+            overflow: hidden;
+        }
+        
+        .mode-text.demo {
+            color: #6c757d;
+        }
+        
+        /* ML Accuracy Styles */
+        #ml-accuracy {
+            transition: all 0.3s ease-in-out;
+            position: relative;
+            padding: 0 5px;
+            border-radius: 4px;
+        }
+        
+        #ml-accuracy.value-updated {
+            animation: pulse-update 1s ease-in-out;
+        }
+        
+        @keyframes pulse-update {
+            0% { background-color: rgba(106, 90, 205, 0.3); }
+            100% { background-color: transparent; }
+        }
+        
+        #ml-accuracy[data-ml-status="excellent"] {
+            border-left: 3px solid #10b981;
+            padding-left: 10px;
+        }
+        
+        #ml-accuracy[data-ml-status="good"] {
+            border-left: 3px solid #f59e0b;
+            padding-left: 10px;
+        }
+        
+        #ml-accuracy[data-ml-status="needs-improvement"] {
+            border-left: 3px solid #ef4444;
+            padding-left: 10px;
+        }
+        
+        /* Learning Progress Indicator */
+        .learning-progress-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background-color: rgba(0,0,0,0.05);
+            border-radius: 0 0 10px 10px;
+            overflow: hidden;
+        }
+        
+        .learning-progress-bar {
+            height: 100%;
+            background-color: #6d28d9;
+            transition: width 1s ease-in-out;
+        }
+        
+        /* ML Toggle Switch Styling */
+        .ml-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+        }
+        
+        .ml-toggle .form-check-input {
+            width: 36px;
+            height: 18px;
+        }
+        
+        .ml-toggle label {
+            font-size: 0.75rem;
+            color: #6c757d;
+        }
+        
+        /* Hide ML Data button */
+        #ml-data-btn {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-0">
+        <!-- Header -->
+        <header class="bg-primary text-white p-3">
+            <div class="container-fluid">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h4 mb-0">
+                        <i class="fas fa-robot me-2"></i>
+                        Soul-Bot Dashboard
+                    </h1>
+    <div>
+                        <span id="status-indicator" class="badge bg-success me-2">
+                            <i class="fas fa-circle me-1"></i>
+                            <span id="status-text">Online</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Control Panel -->
+        <div class="bg-light border-bottom py-2">
+            <div class="container-fluid">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex gap-2 align-items-center">
+                        <button id="start-btn" class="btn btn-success">
+                            <i class="fas fa-play me-2"></i>Start
+                        </button>
+                        <button id="stop-btn" class="btn btn-danger d-none">
+                            <i class="fas fa-stop me-2"></i>Stop
+                        </button>
+                        <button id="scan-btn" class="btn btn-warning">
+                            <i class="fas fa-search me-2"></i>Scan
+                        </button>
+                        
+                        <!-- Trading Mode Selector -->
+                        <div class="ms-3 me-2">
+                            <select id="trading-mode" class="form-select form-select-sm">
+                                <option value="demo">Demo Mode</option>
+                                <option value="live" disabled>Live Trading</option>
+                            </select>
+                        </div>
+                        
+                        <!-- ML Toggle switch -->
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" id="ml-toggle" checked>
+                            <label class="form-check-label" for="ml-toggle">ML System</label>
+                        </div>
+                        
+                        <!-- Token Discovery Toggle switch -->
+                        <div class="form-check form-switch ms-3">
+                            <input class="form-check-input" type="checkbox" id="token-discovery-toggle" checked>
+                            <label class="form-check-label" for="token-discovery-toggle">Token Discovery</label>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <button id="wallet-connect-btn" class="btn btn-primary" onclick="connectWallet()">
+                            <i class="fas fa-wallet me-2"></i>Connect Wallet
+                        </button>
+                        <button id="wallet-disconnect-btn" class="btn btn-outline-danger ms-2" style="display:none;" onclick="disconnectWallet()">
+                            <i class="fas fa-sign-out-alt me-2"></i>Disconnect
+                        </button>
+                        <button id="ml-debug-btn" class="btn btn-outline-info btn-sm ms-2" title="Refresh ML Data">
+                            <i class="fas fa-sync-alt me-1"></i>ML Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Main metrics boxes -->
+            <div class="row g-3 mb-4 mt-3">
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <h6>Portfolio Balance</h6>
+                        <h3 id="portfolio-value">$50.00</h3>
+                        <i class="fas fa-wallet"></i>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <h6>Total Profit/Loss</h6>
+                        <h3 id="total-pnl">$0.00</h3>
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <h6>Return (%)</h6>
+                        <h3 id="daily-pnl">0.00%</h3>
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-box">
+                        <h6>ML Accuracy</h6>
+                        <h3 id="ml-accuracy" data-ml-status="needs-update">0.0%</h3>
+                        <i class="fas fa-brain"></i>
+                        <div class="learning-progress-container">
+                            <div id="ml-learning-progress" class="learning-progress-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Compact Profit Lock section -->
+            <div class="card mb-4" id="profit-lock-section">
+                <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-piggy-bank me-2 text-primary"></i>
+                        <h6 class="mb-0">Auto Profit Lock</h6>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="profit-lock-toggle" checked>
+                    </div>
+                </div>
+                <div class="card-body py-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">Lock</span>
+                                <input type="number" class="form-control form-control-sm" id="profit-lock-percentage" value="20" min="0" max="100">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="d-flex justify-content-between small">
+                                <span>Locked:</span>
+                                <span id="locked-balance" class="fw-bold">$0.00</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div id="profit-lock-progress" class="progress-bar bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control form-control-sm" id="withdraw-amount" placeholder="Amount" min="0" step="0.01">
+                                <button class="btn btn-sm btn-success" id="withdraw-btn">
+                                    <i class="fas fa-wallet me-1"></i>Withdraw
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Add a section for profit lock history -->
+            <div class="card mb-4" style="display:none;">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Profit Lock History</h5>
+                    <button class="btn btn-sm btn-outline-secondary" id="refresh-profit-lock-history">
+                    <h5 class="mb-0">
+                        <i class="fas fa-exchange-alt me-2"></i> Recent Trades
+                    </h5>
+            <div>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-primary active" id="all-trades-btn">All</button>
+                            <button type="button" class="btn btn-sm btn-outline-success" id="successful-trades-btn">Successful</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="failed-trades-btn">Failed</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                    <th>Pair</th>
+                                    <th>Amount</th>
+                                <th>Profit</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                            <tbody id="trades-table-body">
+                                <!-- Trades will be populated here -->
+                        </tbody>
+                    </table>
+                    </div>
+                    <!-- Pagination Controls -->
+                    <div class="d-flex justify-content-between align-items-center p-2 border-top">
+                        <div class="trades-info">
+                            <small id="trades-count">Total: 0 trades</small>
+                            <small class="ms-2" id="trades-page-info">Page 1 of 1</small>
+                        </div>
+                        <div class="trades-pagination">
+                            <button id="prev-page-btn" class="btn btn-sm btn-outline-primary me-2" disabled>
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button id="next-page-btn" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ML Parameters Section -->
+            <div class="card mb-4" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-brain me-2"></i> ML Parameters
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="entry-threshold" class="form-label">Entry Threshold</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="entry-threshold" min="0" max="100" step="0.1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="exit-threshold" class="form-label">Exit Threshold</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="exit-threshold" min="0" max="100" step="0.1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="stop-loss" class="form-label">Stop Loss</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="stop-loss" min="-10" max="0" step="0.1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="take-profit" class="form-label">Take Profit</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="take-profit" min="0" max="100" step="0.1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button class="btn btn-primary" id="save-params-btn">Save Parameters</button>
+                    </div>
+                </div>
+                <div class="card-footer text-muted">
+                    Parameters automatically optimize based on ML learning
+                </div>
+            </div>
+            
+            <!-- Wallet Integration Section -->
+            <div class="wallet-container">
+                <div class="wallet-header">
+                    <div class="wallet-title">Wallet Integration</div>
+                    <div class="wallet-status-container">
+                        <div id="wallet-status" class="wallet-status not-detected">No wallet detected</div>
+                        <button id="wallet-disconnect-btn" class="wallet-disconnect-button">Disconnect</button>
+                    </div>
+                </div>
+                
+                <div id="wallet-address" class="wallet-address" style="display: none;"></div>
+                
+                <div class="wallet-info">
+                    <div id="wallet-balance" class="wallet-balance">Balance: $0.00</div>
+                    <div id="available-for-withdrawal" class="available-for-withdrawal">Available for withdrawal: $0.00</div>
+                </div>
+                
+                <!-- Automated Trading Section -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Automated Trading</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="trading-strategy" class="form-label">Trading Strategy</label>
+                            <select id="trading-strategy" class="form-select">
+                                <option value="default">Default (Balanced)</option>
+                                <option value="conservative">Conservative</option>
+                                <option value="aggressive">Aggressive</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="trade-size" class="form-label">Trade Size</label>
+                            <div class="input-group">
+                                <input type="number" id="trade-size" class="form-control" value="10" min="1" step="1">
+                                <span class="input-group-text">USDC</span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="max-trades" class="form-label">Max Trades Per Day</label>
+                            <input type="number" id="max-trades" class="form-control" value="10" min="1" max="50" step="1">
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button id="start-trading-btn" class="btn btn-success">
+                                <i class="fas fa-play me-2"></i>Start Automated Trading
+                            </button>
+                            <button id="stop-trading-btn" class="btn btn-danger" style="display: none;">
+                                <i class="fas fa-stop me-2"></i>Stop Automated Trading
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Manual Trading Section -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Manual Trading</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="from-token" class="form-label">From Token</label>
+                            <select id="from-token" class="form-select">
+                                <option value="USDC">USDC</option>
+                                <option value="SOL">SOL</option>
+                                <option value="BONK">BONK</option>
+                                <option value="JUP">JUP</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="to-token" class="form-label">To Token</label>
+                            <select id="to-token" class="form-select">
+                                <option value="SOL">SOL</option>
+                                <option value="USDC">USDC</option>
+                                <option value="BONK">BONK</option>
+                                <option value="JUP">JUP</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="trade-amount" class="form-label">Amount</label>
+                            <div class="input-group">
+                                <input type="number" id="trade-amount" class="form-control" min="0.1" step="0.1">
+                                <span class="input-group-text" id="trade-amount-currency">USDC</span>
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <button id="execute-trade-btn" class="btn btn-primary">
+                                <i class="fas fa-exchange-alt me-2"></i>Execute Trade
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Deposit Section -->
+                <div class="card mt-3">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Deposit Funds</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="deposit-amount" class="form-label">Amount</label>
+                            <div class="input-group">
+                                <input type="number" id="deposit-amount" class="form-control" min="0.1" step="0.1">
+                                <select id="deposit-token" class="input-group-text">
+                                    <option value="SOL">SOL</option>
+                                    <option value="USDC">USDC</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="d-grid">
+                            <button id="deposit-btn" class="btn btn-success">
+                                <i class="fas fa-arrow-right me-2"></i>Deposit to Trading Wallet
+                            </button>
+                        </div>
+                        <div class="alert alert-info mt-3">
+                            <small>Deposit funds to your trading wallet to start using automated trading features. These funds will be used by the trading bot to execute trades on your behalf.</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Withdrawal Section -->
+                <div id="withdrawal-section" class="withdrawal-section" style="display:none;">
+                    <div class="withdrawal-header">
+                        <div class="withdrawal-title">Withdrawal</div>
+                    </div>
+                    <div class="withdrawal-form">
+                        <div class="withdrawal-form-group">
+                            <label for="withdrawal-amount">Amount</label>
+                            <div class="withdrawal-input-group">
+                                <input type="number" id="withdrawal-amount" placeholder="0.00" min="0.01" step="0.01">
+                                <select id="withdrawal-token">
+                                    <option value="USDC">USDC</option>
+                                    <option value="SOL">SOL</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button id="withdraw-button" class="withdrawal-button">Withdraw Funds</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Live Mode Toggle -->
+            <div class="mode-toggle" style="display: none;">
+                <span class="mode-toggle-label">Trading Mode:</span>
+                <label class="mode-switch">
+                    <input type="checkbox" id="live-mode-toggle" disabled>
+                    <span class="mode-slider"></span>
+                </label>
+                <span id="mode-text" class="mode-text demo">Demo</span>
+            </div>
+
+            <!-- Socket Status Debugging (hidden) -->
+            <div id="debug-section" style="display:none;">
+                <div class="debug-item">
+                    <span>Socket Status:</span>
+                    <span id="socket-status">Disconnected</span>
+                </div>
+                <div class="debug-item">
+                    <span>Wallet Status:</span>
+                    <span id="wallet-debug-status">Not connected</span>
+                </div>
+                <div class="debug-item">
+                    <span>Last Data:</span>
+                    <span id="last-data-received">None</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add notification container -->
+    <div id="notification-container" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;"></div>
+    
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom Scripts -->
+    <script src="js/app.js"></script>
+    <script src="js/wallet-integration.js"></script>
+    <script src="js/wallet-connector.js"></script>
+    <script src="js/trade-handler.js"></script>
+    <script src="js/trade-display.js"></script>
+    <script src="js/portfolio-updater.js"></script>
+    <script src="js/start-button-fix.js"></script>
+    <script src="js/scan-button-fix.js"></script>
+    
+    <!-- Direct wallet connection script -->
+    <script>
+        // Make connectWallet function directly available in global scope
+        function connectWallet() {
+            console.log("Direct connect wallet function called");
+            
+            // Try to detect wallet
+            let provider = null;
+            if (window.phantom?.solana) {
+                provider = window.phantom.solana;
+                console.log("Using Phantom (modern)");
+            } else if (window.solana?.isPhantom) {
+                provider = window.solana;
+                console.log("Using Phantom (legacy)");
+            } else if (window.solflare) {
+                provider = window.solflare;
+                console.log("Using Solflare");
+            } else {
+                alert("No wallet detected. Please install Phantom or Solflare wallet.");
+                return;
+            }
+            
+            // Connect to wallet directly
+            provider.connect()
+                .then(result => {
+                    console.log("Connected!", result);
+                    if (result.publicKey) {
+                        const address = result.publicKey.toString();
+                        console.log("Wallet address:", address);
+                        
+                        // Store provider globally
+                        window.walletProvider = provider;
+                        window.walletAddress = address;
+                        window.walletConnected = true;
+                        
+                        // Update UI and state
+                        document.getElementById('wallet-status').textContent = "Connected";
+                        document.getElementById('wallet-status').className = "wallet-status connected";
+                        
+                        const addressEl = document.getElementById('wallet-address');
+                        if (addressEl) {
+                            addressEl.textContent = address.substring(0, 6) + "..." + address.substring(address.length - 4);
+                            addressEl.style.display = "block";
+                        }
+                        
+                        // Enable live mode
+                        const tradingModeSelect = document.getElementById('trading-mode');
+                        if (tradingModeSelect) {
+                            const liveOption = tradingModeSelect.querySelector('option[value="live"]');
+                            if (liveOption) liveOption.disabled = false;
+                            tradingModeSelect.value = 'live';
+                            tradingModeSelect.dispatchEvent(new Event('change'));
+                        }
+                        
+                        // Hide connect button, show disconnect
+                        document.getElementById('wallet-connect-btn').style.display = "none";
+                        document.getElementById('wallet-disconnect-btn').style.display = "inline-block";
+                        
+                        // Enable withdrawal section
+                        const withdrawalSection = document.getElementById('withdrawal-section');
+                        if (withdrawalSection) {
+                            withdrawalSection.style.display = "block";
+                        }
+                        
+                        // Notify the server via socket
+                        if (window.socket) {
+                            window.socket.emit('connect_wallet', { address });
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error("Connection error:", err);
+                    alert("Failed to connect wallet: " + err.message);
+                });
+        }
+        
+        // Add disconnect function
+        function disconnectWallet() {
+            console.log("Direct disconnect wallet function called");
+            
+            if (!window.walletProvider) {
+                console.log("No wallet provider to disconnect");
+                return;
+            }
+            
+            try {
+                // Disconnect wallet
+                window.walletProvider.disconnect();
+                
+                // Reset global state
+                window.walletProvider = null;
+                window.walletAddress = null;
+                window.walletConnected = false;
+                
+                // Update UI
+                document.getElementById('wallet-status').textContent = "Detected, not connected";
+                document.getElementById('wallet-status').className = "wallet-status detected";
+                
+                const addressEl = document.getElementById('wallet-address');
+                if (addressEl) {
+                    addressEl.style.display = "none";
+                }
+                
+                // Show connect button, hide disconnect
+                document.getElementById('wallet-connect-btn').style.display = "inline-block";
+                document.getElementById('wallet-disconnect-btn').style.display = "none";
+                
+                // Disable live mode
+                const tradingModeSelect = document.getElementById('trading-mode');
+                if (tradingModeSelect) {
+                    const liveOption = tradingModeSelect.querySelector('option[value="live"]');
+                    if (liveOption) liveOption.disabled = true;
+                    tradingModeSelect.value = 'demo';
+                    tradingModeSelect.dispatchEvent(new Event('change'));
+                }
+                
+                // Hide withdrawal section
+                const withdrawalSection = document.getElementById('withdrawal-section');
+                if (withdrawalSection) {
+                    withdrawalSection.style.display = "none";
+                }
+                
+                // Notify server
+                if (window.socket) {
+                    window.socket.emit('disconnect_wallet');
+                }
+                
+                console.log("Wallet disconnected successfully");
+            } catch (error) {
+                console.error("Error disconnecting wallet:", error);
+            }
+        }
+        
+        // Add event listener to disconnect button
+        document.addEventListener('DOMContentLoaded', function() {
+            const disconnectBtn = document.getElementById('wallet-disconnect-btn');
+            if (disconnectBtn) {
+                disconnectBtn.addEventListener('click', disconnectWallet);
+            }
+        });
+    </script>
+
+    <!-- Add JavaScript for toggle functionality in app.js -->
+    <script>
+        // Add event listeners for ML and token discovery toggles
+        document.addEventListener('DOMContentLoaded', function() {
+            // ML Toggle
+            const mlToggle = document.getElementById('ml-toggle');
+            if (mlToggle) {
+                mlToggle.addEventListener('change', function() {
+                    const enabled = this.checked;
+                    // Call API to toggle ML
+                    fetch('/api/ml/toggle', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ enabled }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification(`ML system ${enabled ? 'enabled' : 'disabled'}`, 'success');
+                        } else {
+                            showNotification(`Failed to ${enabled ? 'enable' : 'disable'} ML system`, 'error');
+                            // Reset toggle to previous state
+                            mlToggle.checked = !enabled;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error toggling ML:', error);
+                        showNotification('Error toggling ML system', 'error');
+                        // Reset toggle to previous state
+                        mlToggle.checked = !enabled;
+                    });
+                });
+            }
+
+            // Token Discovery Toggle
+            const tokenDiscoveryToggle = document.getElementById('token-discovery-toggle');
+            if (tokenDiscoveryToggle) {
+                tokenDiscoveryToggle.addEventListener('change', function() {
+                    const enabled = this.checked;
+                    // Call API to toggle token discovery
+                    fetch('/api/token-discovery/toggle', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ enabled }),
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotification(`Token discovery ${enabled ? 'enabled' : 'disabled'}`, 'success');
+                        } else {
+                            showNotification(`Failed to ${enabled ? 'enable' : 'disable'} token discovery`, 'error');
+                            // Reset toggle to previous state
+                            tokenDiscoveryToggle.checked = !enabled;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error toggling token discovery:', error);
+                        showNotification('Error toggling token discovery', 'error');
+                        // Reset toggle to previous state
+                        tokenDiscoveryToggle.checked = !enabled;
+                    });
+                });
+            }
+
+            // Initialize toggle states from server
+            fetch('/api/ml/state')
+                .then(response => response.json())
+                .then(data => {
+                    if (mlToggle) {
+                        mlToggle.checked = data.enabled;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching ML state:', error);
+                });
+
+            fetch('/api/token-discovery/state')
+                .then(response => response.json())
+                .then(data => {
+                    if (tokenDiscoveryToggle) {
+                        tokenDiscoveryToggle.checked = data.enabled;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching token discovery state:', error);
+                });
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,828 @@
+/**
+ * Soul-Bot Wallet Connection UI Styles
+ */
+
+/* Status indicators */
+.status-dot {
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.status-dot.offline {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+/* Wallet address formatting */
+.wallet-address {
+  font-family: monospace;
+  padding: 4px 8px;
+  background-color: #f8fafc;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+/* Trades list */
+.trades-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.trade-item {
+  padding: 10px;
+  border-radius: 4px;
+  background-color: #f8fafc;
+  margin-bottom: 8px;
+}
+
+/* Notification system */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 15px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  min-width: 300px;
+  max-width: 450px;
+  z-index: 1000;
+  background-color: white;
+  transform: translateY(-20px);
+  opacity: 0;
+  transition: all 0.3s ease-in-out;
+  pointer-events: auto;
+}
+
+.notification.active {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+}
+
+.notification-content i {
+  margin-right: 10px;
+  font-size: 1.25rem;
+}
+
+.notification-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #9ca3af;
+}
+
+.notification-close:hover {
+  color: #4b5563;
+}
+
+/* Notification types */
+.notification-success {
+  border-left: 4px solid #10b981;
+}
+
+.notification-success i {
+  color: #10b981;
+}
+
+.notification-error {
+  border-left: 4px solid #ef4444;
+}
+
+.notification-error i {
+  color: #ef4444;
+}
+
+.notification-warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.notification-warning i {
+  color: #f59e0b;
+}
+
+.notification-info {
+  border-left: 4px solid #3b82f6;
+}
+
+.notification-info i {
+  color: #3b82f6;
+}
+
+/* Trade badge status colors */
+.badge.bg-success {
+  background-color: #10b981 !important;
+}
+
+.badge.bg-warning {
+  background-color: #f59e0b !important;
+}
+
+.badge.bg-danger {
+  background-color: #ef4444 !important;
+}
+
+.badge.bg-secondary {
+  background-color: #6b7280 !important;
+}
+
+/* Trade modal */
+.modal-trade-details {
+  background-color: rgba(107, 114, 128, 0.1);
+  border-radius: 5px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.modal-trade-details .row {
+  margin-bottom: 0.5rem;
+}
+
+/* Trade result display */
+.trade-signature {
+  word-break: break-all;
+  font-family: monospace;
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  background-color: rgba(0,0,0,0.03);
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.trade-result-details {
+  margin-top: 1rem;
+  border-top: 1px solid rgba(0,0,0,0.1);
+  padding-top: 1rem;
+}
+
+/* Form controls */
+.input-group-text.token-symbol {
+  min-width: 60px;
+  justify-content: center;
+}
+
+/* Wallet panel */
+.wallet-panel {
+  position: relative;
+}
+
+.wallet-balance {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.wallet-action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.wallet-warning {
+  font-size: 0.8rem;
+  color: #ef4444;
+  margin-top: 0.5rem;
+}
+
+/* Loading states */
+.btn-loading {
+  position: relative;
+}
+
+.btn-loading .btn-text {
+  visibility: hidden;
+}
+
+.btn-loading::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: calc(50% - 8px);
+  left: calc(50% - 8px);
+  border: 2px solid rgba(255,255,255,0.5);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Wallet Integration Styles */
+.wallet-container {
+  background-color: rgba(0, 0, 0, 0.8);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  color: #e2e2e2;
+}
+
+.wallet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 10px;
+}
+
+.wallet-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.wallet-status-container {
+  display: flex;
+  align-items: center;
+}
+
+.wallet-status {
+  margin-right: 10px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.wallet-status.connected {
+  background-color: #0bab64;
+  color: white;
+}
+
+.wallet-status.detected {
+  background-color: #e6a23c;
+  color: white;
+}
+
+.wallet-status.not-detected {
+  background-color: #f56c6c;
+  color: white;
+}
+
+.wallet-address {
+  font-family: monospace;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 5px 10px;
+  border-radius: 5px;
+  margin-top: 10px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.wallet-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.wallet-balance, .available-for-withdrawal {
+  font-size: 14px;
+  padding: 5px 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+}
+
+/* Withdrawal Section */
+.withdrawal-section {
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+  padding: 20px;
+  margin-top: 20px;
+  display: none; /* Hidden by default until wallet connected */
+}
+
+.withdrawal-header {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.withdrawal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.withdrawal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.withdrawal-input {
+  flex: 1;
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  padding: 8px 12px;
+  color: white;
+}
+
+.withdrawal-token-select {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
+  padding: 8px 12px;
+  color: white;
+  min-width: 100px;
+}
+
+.include-locked-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  color: #e2e2e2;
+}
+
+.withdrawal-button {
+  background-color: #f7931a; /* Bitcoin orange as a nod to crypto */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.withdrawal-button:hover {
+  background-color: #e27b15;
+}
+
+.withdrawal-button:disabled {
+  background-color: #7e7e7e;
+  cursor: not-allowed;
+}
+
+.withdrawal-status {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.withdrawal-status.processing {
+  background-color: #409eff;
+  color: white;
+}
+
+.withdrawal-status.success {
+  background-color: #67c23a;
+  color: white;
+}
+
+.withdrawal-status.error {
+  background-color: #f56c6c;
+  color: white;
+}
+
+/* Wallet connection buttons */
+.wallet-connect-button, .wallet-disconnect-button {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.wallet-connect-button {
+  background-color: #5269ff;
+  color: white;
+}
+
+.wallet-connect-button:hover {
+  background-color: #4257e5;
+}
+
+.wallet-disconnect-button {
+  background-color: #f56c6c;
+  color: white;
+  display: none; /* Hidden by default */
+}
+
+.wallet-disconnect-button:hover {
+  background-color: #e04747;
+}
+
+/* Withdrawal History */
+.withdrawal-history-container {
+  margin-top: 20px;
+}
+
+.withdrawal-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.withdrawal-history-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.refresh-history-button {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  border-radius: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.refresh-history-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.withdrawal-history {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.withdrawal-history-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 5px;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-left: 3px solid #f7931a;
+}
+
+.withdrawal-date {
+  font-size: 12px;
+  color: #a0a0a0;
+  margin-bottom: 5px;
+}
+
+.withdrawal-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.withdrawal-amount {
+  font-weight: bold;
+  color: #fff;
+}
+
+.withdrawal-address {
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.withdrawal-tx a {
+  color: #5269ff;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.withdrawal-tx a:hover {
+  text-decoration: underline;
+}
+
+/* Live Mode UI */
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  margin: 15px 0;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.mode-toggle-label {
+  font-weight: 600;
+  margin-right: 10px;
+  color: #495057;
+}
+
+.mode-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  margin: 0 10px;
+}
+
+.mode-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mode-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.mode-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .mode-slider {
+  background-color: #dc3545;
+}
+
+input:disabled + .mode-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input:focus + .mode-slider {
+  box-shadow: 0 0 1px #dc3545;
+}
+
+input:checked + .mode-slider:before {
+  transform: translateX(26px);
+}
+
+.mode-text {
+  font-weight: 600;
+}
+
+.mode-text.demo {
+  color: #6c757d;
+}
+
+.mode-text.live {
+  color: #dc3545;
+}
+
+/* Trades section styling */
+#trades-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+#trades-container table {
+  margin-bottom: 0;
+}
+
+/* Ensure the table head stays fixed */
+#trades-container thead {
+  position: sticky;
+  top: 0;
+  background-color: #f8f9fa;
+  z-index: 10;
+}
+
+/* Add scrollbar styling */
+#trades-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+#trades-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 8px;
+}
+
+#trades-container::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 8px;
+}
+
+#trades-container::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Portfolio metrics styling */
+.portfolio-metric {
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background-color: #ffffff;
+  transition: all 0.3s ease;
+}
+
+.portfolio-metric:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15);
+}
+
+.portfolio-metric h3 {
+  margin-bottom: 10px;
+  font-size: 16px;
+  color: #555;
+  font-weight: 500;
+}
+
+.portfolio-metric .value {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 0;
+}
+
+.portfolio-metric .positive {
+  color: #28a745;
+}
+
+.portfolio-metric .negative {
+  color: #dc3545;
+}
+
+/* Animation for portfolio metrics updates */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.portfolio-metric.updated {
+  animation: pulse 0.6s ease;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .portfolio-metric {
+    margin-bottom: 15px;
+    min-height: 100px;
+  }
+  
+  .portfolio-metric .value {
+    font-size: 20px;
+  }
+  
+  #trades-container {
+    max-height: 300px;
+  }
+}
+
+/* Ensure numbers don't break layout when they grow */
+#portfolio-value, #total-pnl, #daily-pnl, #ml-accuracy {
+  min-width: 80px;
+  display: inline-block;
+}
+
+/* Trade rows hover effect */
+#trades-table-body tr {
+  transition: background-color 0.2s ease;
+}
+
+#trades-table-body tr:hover {
+  filter: brightness(0.95);
+}
+
+/* Recent trade animation */
+@keyframes highlight {
+  0% { background-color: rgba(255, 255, 128, 0.7); }
+  100% { background-color: transparent; }
+}
+
+.new-trade {
+  animation: highlight 1.5s ease-out;
+}
+
+/* Network selector styles */
+.network-selector {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+  padding: 6px 12px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+}
+
+.network-selector label {
+  margin-right: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+}
+
+.network-selector select {
+  flex: 1;
+  max-width: 150px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background-color: white;
+  font-size: 13px;
+}
+
+/* Connected wallet indicator improvements */
+.wallet-status.connected {
+  background-color: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  position: relative;
+  padding-left: 25px;
+}
+
+.wallet-status.connected:before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background-color: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* Wallet connect button animation */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(13, 110, 253, 0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+    transform: scale(1);
+  }
+}
+
+#wallet-connect-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+#wallet-connect-btn:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% {
+    left: -100%;
+  }
+  20% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+} 
